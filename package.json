@@ -1,0 +1,28 @@
+{
+  "name": "awilix-modular",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
+  },
+  "peerDependencies": {
+    "awilix": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@vitest/ui": "^4.0.18",
+    "tsx": "^4.19.4",
+    "typescript": "5.5.4",
+    "vitest": "^4.0.18"
+  }
+}
