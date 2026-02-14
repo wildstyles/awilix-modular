@@ -8,7 +8,7 @@ describe("DIContext", () => {
 	let diContext: DIContext;
 
 	class TestableBase {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: Test helper accepts any dependencies
 		constructor(private deps?: any) {}
 
 		getDepKeys() {
@@ -34,9 +34,9 @@ describe("DIContext", () => {
 	const rootResolversCount = Object.keys(rootContainerResolvers).length;
 
 	beforeEach(() => {
-		const rootContainer = createContainer().register(rootContainerResolvers);
-
-		diContext = new DIContext(rootContainer);
+		diContext = new DIContext(
+			createContainer().register(rootContainerResolvers),
+		);
 	});
 
 	describe("Ensure that module interactions/declarations are correct", () => {
@@ -124,10 +124,10 @@ describe("DIContext", () => {
 
 			diContext.registerModules([testModule]);
 
-			const scope = diContext.moduleScopes.get("FactoryModule")!;
+			const scope = diContext.moduleScopes.get("FactoryModule");
 
-			expect(scope.hasRegistration("factoryService")).toBeTruthy();
-			expect(scope.resolve("factoryService").getDepKeys().length).toBe(0);
+			expect(scope?.hasRegistration("factoryService")).toBeTruthy();
+			expect(scope?.resolve("factoryService").getDepKeys().length).toBe(0);
 		});
 
 		it("should register a factory provider with dependencies", () => {
@@ -147,10 +147,10 @@ describe("DIContext", () => {
 
 			diContext.registerModules([testModule]);
 
-			const scope = diContext.moduleScopes.get("FactoryWithDepsModule")!;
-			const factoryService = scope.resolve("factoryService");
+			const scope = diContext.moduleScopes.get("FactoryWithDepsModule");
+			const factoryService = scope?.resolve("factoryService");
 
-			expect(scope.hasRegistration("factoryService")).toBeTruthy();
+			expect(scope?.hasRegistration("factoryService")).toBeTruthy();
 			expect(factoryService.getDepKeys().length).toBe(1);
 			expect(factoryService.getDepKeys()[0]).toBe("baseService");
 		});
@@ -180,10 +180,10 @@ describe("DIContext", () => {
 
 			diContext.registerModules([testModule]);
 
-			const scope = diContext.moduleScopes.get("OrderIndependentModule")!;
-			const factoryServiceA = scope.resolve("factoryServiceA");
-			const factoryServiceB = scope.resolve("factoryServiceB");
-			const serviceA = scope.resolve("serviceA");
+			const scope = diContext.moduleScopes.get("OrderIndependentModule");
+			const factoryServiceA = scope?.resolve("factoryServiceA");
+			const factoryServiceB = scope?.resolve("factoryServiceB");
+			const serviceA = scope?.resolve("serviceA");
 
 			expect(serviceA.getDepKeys().length).toBe(3 + rootResolversCount);
 			expect(serviceA.getDepKeys()).toContain("factoryServiceA");
@@ -210,9 +210,9 @@ describe("DIContext", () => {
 				},
 			]);
 
-			const scope = diContext.moduleScopes.get("TestModule")!;
+			const scope = diContext.moduleScopes.get("TestModule");
 
-			expect(scope.resolve("testService").getName()).toBe("TestService");
+			expect(scope?.resolve("testService").getName()).toBe("TestService");
 		});
 	});
 
@@ -258,15 +258,15 @@ describe("DIContext", () => {
 				},
 			]);
 
-			const scope = diContext.moduleScopes.get("ImportingModule")!;
-			const localService = scope.resolve("localService");
-			const sharedService = scope.resolve("sharedService");
+			const scope = diContext.moduleScopes.get("ImportingModule");
+			const localService = scope?.resolve("localService");
+			const sharedService = scope?.resolve("sharedService");
 
-			expect(scope.hasRegistration("sharedService")).toBeTruthy();
+			expect(scope?.hasRegistration("sharedService")).toBeTruthy();
 			// internal provider is NOT exported and should be unavailable
-			expect(scope.hasRegistration("internalService")).toBeFalsy();
+			expect(scope?.hasRegistration("internalService")).toBeFalsy();
 			// imports of imported are also should be unavailable
-			expect(scope.hasRegistration("internalService1")).toBeFalsy();
+			expect(scope?.hasRegistration("internalService1")).toBeFalsy();
 
 			expect(sharedService.getName()).toBe("SharedService");
 			expect(sharedService.getDepKeys()).toContain("internalService");

@@ -35,8 +35,10 @@ export class DIContext<M extends AnyModule = AnyModule> {
 	}
 
 	private registerProvidersWithImports(m: M, targetScope?: AwilixContainer) {
-		if (this.moduleScopes.has(m.name)) {
-			return this.moduleScopes.get(m.name)!;
+		const existingScope = this.moduleScopes.get(m.name);
+
+		if (existingScope) {
+			return existingScope;
 		}
 
 		this.ensureImportedModulesUniqueness(m);
@@ -121,7 +123,8 @@ export class DIContext<M extends AnyModule = AnyModule> {
 		this.ensureNoCyclicDependencies(m, sortedKeys);
 
 		return sortedKeys.reduce<typeof m.providers>((acc, key) => {
-			acc[key] = m.providers[key]!;
+			const provider = m.providers[key];
+			if (provider) acc[key] = provider;
 
 			return acc;
 		}, {});

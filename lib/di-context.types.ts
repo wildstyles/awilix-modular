@@ -1,7 +1,5 @@
 import type { Resolver } from "awilix";
 
-type CommonDependencies = {};
-
 // ============================================================================
 // Base Type Definitions
 // ============================================================================
@@ -26,7 +24,7 @@ type ToResolverProviderMap<
 // TODO: make any class constructor instead of object
 type ProviderMap = Record<string, object>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Generic module type accepts any definition
 export type AnyModule = StaticModule<ModuleDef<any>>;
 
 // Helper type to map dependency keys to their actual types
@@ -47,7 +45,7 @@ type FactoryProvider<
 	inject?: Keys;
 	useFactory: Strict extends true
 		? (...args: MapKeysToValues<DepsMap, Keys>) => T
-		: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+		: // biome-ignore lint/suspicious/noExplicitAny: Non-strict factory accepts any args
 			(...args: any[]) => T;
 };
 
@@ -96,6 +94,7 @@ type ResolveDeps<
 		providers?: ProviderMap;
 		imports?: AnyModule[];
 	},
+	CommonDependencies extends UnknownRecord,
 > = ResolveProviders<D> &
 	(D["imports"] extends AnyModule[]
 		? ExtractExportsFromImports<D["imports"]>
@@ -116,15 +115,16 @@ export type ModuleDef<
 		imports?: AnyModule[];
 		forRootConfig?: UnknownRecord;
 	},
+	CommonDependencies extends UnknownRecord = UnknownRecord,
 > = {
 	providers: ResolveProviders<D>;
 	exports: ResolveExports<D>;
 	imports: ResolveImports<D>;
-	deps: ResolveDeps<D>;
+	deps: ResolveDeps<D, CommonDependencies>;
 } & ResolveForRootConfig<D>;
 
 export type ExtractModuleDef<T> = T extends {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: forRoot can accept any arguments
 	forRoot: (...args: any[]) => infer R;
 }
 	? R
@@ -178,7 +178,7 @@ export type Module<TDef extends BaseModuleDef & Partial<WithForRootConfig>> =
 
 export function isFactoryProvider<T extends object>(
 	provider: unknown,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// biome-ignore lint/suspicious/noExplicitAny: Type guard accepts any dependency map
 ): provider is FactoryProvider<T, any, readonly string[], false> {
 	return (
 		typeof provider === "object" &&
@@ -195,7 +195,7 @@ export function isResolver<T extends object>(
 	);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Generic factory accepts any dependency types
 export function createFactoryProvider<DepsMap extends Record<string, any>>() {
 	return <T extends object, const Keys extends readonly (keyof DepsMap)[]>(
 		provider: FactoryProvider<T, DepsMap, Keys>,
