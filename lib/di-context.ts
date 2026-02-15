@@ -1,18 +1,15 @@
-import { type AwilixContainer, asValue, type Resolver } from "awilix";
+import { type AwilixContainer, asValue } from "awilix";
 
 import {
 	type AnyModule,
 	isFactoryProvider,
 	isResolver,
+	type MandatoryNameAndRegistrationPair,
 } from "./di-context.types.js";
 
 type ProdiderDepsGraph = {
 	graph: Map<string, string[]>;
 	inDegree: Map<string, number>;
-};
-
-export type MandatoryNameAndRegistrationPair<T> = {
-	[U in keyof T]: Resolver<T[U]>;
 };
 
 export class DIContext<M extends AnyModule = AnyModule> {
