@@ -1,13 +1,10 @@
-import {
-	type AwilixContainer,
-	asValue,
-	type NameAndRegistrationPair,
-} from "awilix";
+import { type AwilixContainer, asValue } from "awilix";
 
 import {
 	type AnyModule,
 	isFactoryProvider,
 	isResolver,
+	type MandatoryNameAndRegistrationPair,
 } from "./di-context.types.js";
 
 type ProdiderDepsGraph = {
@@ -57,13 +54,16 @@ export class DIContext<M extends AnyModule = AnyModule> {
 						scope: importedScope,
 					}));
 			})
-			.reduce<NameAndRegistrationPair<Record<string, object>>>((acc, curr) => {
-				acc[curr.key] = isResolver(curr.registration)
-					? asValue(curr.registration.resolve(curr.scope))
-					: curr.registration;
+			.reduce<MandatoryNameAndRegistrationPair<Record<string, object>>>(
+				(acc, curr) => {
+					acc[curr.key] = isResolver(curr.registration)
+						? asValue(curr.registration.resolve(curr.scope))
+						: curr.registration;
 
-				return acc;
-			}, {});
+					return acc;
+				},
+				{},
+			);
 
 		scope.register(resolvedExportedFromImports);
 

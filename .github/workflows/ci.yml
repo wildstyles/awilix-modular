@@ -21,12 +21,14 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install dependencies
         run: npm install
-      - name: Build
-        run: pnpm run build
-      - name: Run Tests
-        run: pnpm run test
+      - name: Run Type checks
+        run: npm run check-types
       - name: Run Linting
-        run: pnpm run lint
+        run: npm run lint
+      - name: Run Tests
+        run: npm run test
+      - name: Build
+        run: npm run build
   automerge:
     needs: build
     runs-on: ubuntu-latest

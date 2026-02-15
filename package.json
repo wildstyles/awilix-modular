@@ -1,12 +1,14 @@
 {
 	"name": "awilix-modular",
+	"description": "Wrapper over awilix to build nest.js similiar modules with strict type safety",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"version": "1.0.0",
 	"license": "MIT",
 	"scripts": {
 		"build": "tsc",
-		"build:release": "del-cli dist && pnpm run lint && pnpm run build",
+		"build:release": "del-cli dist && npm run lint && npm run build",
+		"check-types": "tsc --pretty --noEmit",
 		"lint:fix": "biome check --write .",
 		"lint": "biome check .",
 		"test": "vitest run",
@@ -21,7 +23,24 @@
 		"@types/node": "^22.15.21",
 		"@vitest/coverage-v8": "^4.0.18",
 		"del-cli": "^7.0.0",
-		"typescript": "5.5.4",
+		"typescript": "^5.9.3",
 		"vitest": "^4.0.18"
-	}
+	},
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/wildstyles/awilix-modular.git"
+	},
+	"keywords": [
+		"modular",
+		"dependency-injection",
+		"di",
+		"modularization",
+		"awilix"
+	],
+	"homepage": "https://github.com/wildstyles/awilix-modular",
+	"files": [
+		"README.md",
+		"LICENSE",
+		"dist/*"
+	]
 }
