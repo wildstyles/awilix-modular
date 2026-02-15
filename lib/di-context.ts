@@ -1,8 +1,4 @@
-import {
-	type AwilixContainer,
-	asValue,
-	type NameAndRegistrationPair,
-} from "awilix";
+import { type AwilixContainer, asValue, type Resolver } from "awilix";
 
 import {
 	type AnyModule,
@@ -13,6 +9,10 @@ import {
 type ProdiderDepsGraph = {
 	graph: Map<string, string[]>;
 	inDegree: Map<string, number>;
+};
+
+export type MandatoryNameAndRegistrationPair<T> = {
+	[U in keyof T]: Resolver<T[U]>;
 };
 
 export class DIContext<M extends AnyModule = AnyModule> {
@@ -57,13 +57,16 @@ export class DIContext<M extends AnyModule = AnyModule> {
 						scope: importedScope,
 					}));
 			})
-			.reduce<NameAndRegistrationPair<Record<string, object>>>((acc, curr) => {
-				acc[curr.key] = isResolver(curr.registration)
-					? asValue(curr.registration.resolve(curr.scope))
-					: curr.registration;
+			.reduce<MandatoryNameAndRegistrationPair<Record<string, object>>>(
+				(acc, curr) => {
+					acc[curr.key] = isResolver(curr.registration)
+						? asValue(curr.registration.resolve(curr.scope))
+						: curr.registration;
 
-				return acc;
-			}, {});
+					return acc;
+				},
+				{},
+			);
 
 		scope.register(resolvedExportedFromImports);
 
