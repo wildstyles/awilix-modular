@@ -22,11 +22,11 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build
-        run: pnpm run build
+        run: npm run build
       - name: Run Tests
-        run: pnpm run test
+        run: npm run test
       - name: Run Linting
-        run: pnpm run lint
+        run: npm run lint
   automerge:
     needs: build
     runs-on: ubuntu-latest
