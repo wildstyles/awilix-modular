@@ -1,6 +1,7 @@
 import { type AwilixContainer, asValue } from "awilix";
 
 import {
+	type AnyHandlerConstructor,
 	type AnyModule,
 	isFactoryProvider,
 	isResolver,
@@ -12,13 +13,20 @@ type ProdiderDepsGraph = {
 	inDegree: Map<string, number>;
 };
 
+type HandlerCallbackFn = (
+	HandlerClass: AnyHandlerConstructor,
+	scope: AwilixContainer,
+) => void;
+
 export class DIContext<M extends AnyModule = AnyModule> {
 	// TODO: do scope caching for dynamic modules
 	public readonly moduleScopes = new Map<string, AwilixContainer>();
 	private readonly rootContainer: AwilixContainer;
+	private readonly onHandler?: HandlerCallbackFn;
 
-	constructor(rootContainer: AwilixContainer) {
+	constructor(rootContainer: AwilixContainer, onHandler?: HandlerCallbackFn) {
 		this.rootContainer = rootContainer;
+		this.onHandler = onHandler;
 	}
 
 	registerModules(modules: M[]) {
@@ -26,9 +34,18 @@ export class DIContext<M extends AnyModule = AnyModule> {
 			const scope = this.rootContainer.createScope();
 
 			this.registerProvidersWithImports(module, scope);
+			this.processQueryHandlers(module, scope);
 
 			return { scope, name: module.name };
 		});
+	}
+
+	private processQueryHandlers(m: M, scope: AwilixContainer) {
+		if (!this.onHandler) return;
+
+		for (const HandlerClass of m.queryHandlers || []) {
+			this.onHandler(HandlerClass, scope);
+		}
 	}
 
 	private registerProvidersWithImports(m: M, targetScope?: AwilixContainer) {
@@ -96,20 +113,6 @@ export class DIContext<M extends AnyModule = AnyModule> {
 
 		return scope;
 	}
-
-	// // TODO: make similar registration for event/command bus
-	// private registerQueryHandlersInBus(m: M, diScope: AwilixContainer) {
-	//   for (const HandlerClass of m.queryHandlers || []) {
-	//     // I don't want handlers to be registered in providers scope.
-	//     // Therefore it's only built and registered within query bus
-	//     const handler = diScope.build(HandlerClass);
-	//
-	//     this.fastify.queryBus.register(
-	//       handler.key,
-	//       handler.executor.bind(handler),
-	//     );
-	//   }
-	// }
 
 	private sortProvidersByDependencies(m: M): typeof m.providers {
 		const depsGraph = this.buildDepGraph(m, this.initializeDepGraph(m));

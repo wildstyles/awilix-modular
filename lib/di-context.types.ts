@@ -155,6 +155,19 @@ type ExtractDeps<Def> = Def extends {
 	? D
 	: Record<string, unknown>;
 
+export type AnyHandlerConstructor = {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	new (...args: any[]): AnyHandler;
+};
+
+export interface AnyHandler {
+	readonly key: string;
+	executor: (
+		payload: unknown,
+		meta: Record<string, unknown>,
+	) => Promise<unknown>;
+}
+
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
 	imports: Def["imports"] extends AnyModule[]
@@ -162,6 +175,7 @@ export type StaticModule<Def extends StaticModuleDef> = {
 		: readonly [];
 	providers: ToResolverProviderMap<Def["providers"], ExtractDeps<Def>>;
 	exports: ToResolverProviderMap<Def["exports"], ExtractDeps<Def>>;
+	queryHandlers?: AnyHandlerConstructor[];
 };
 
 type DynamicModule<TDef extends DynamicModuleDef> = {
