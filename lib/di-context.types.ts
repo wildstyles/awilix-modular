@@ -162,10 +162,7 @@ export type AnyHandlerConstructor = {
 
 export interface AnyHandler {
 	readonly key: string;
-	executor: (
-		payload: unknown,
-		meta: Record<string, unknown>,
-	) => Promise<unknown>;
+	executor: (payload: any, meta: Record<string, any>) => Promise<any>;
 }
 
 export type StaticModule<Def extends StaticModuleDef> = {
