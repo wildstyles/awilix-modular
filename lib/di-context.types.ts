@@ -1,4 +1,5 @@
 import type { Resolver } from "awilix";
+import type { Handler } from "./cqrs.types.ts";
 
 // ============================================================================
 // Base Type Definitions
@@ -159,11 +160,6 @@ export type HandlerConstructor = {
 export type ControllerConstructor<TFramework = unknown> = {
 	new (...args: any[]): Controller<TFramework>;
 };
-
-export interface Handler {
-	readonly key: string;
-	executor: (payload: any, meta: Record<string, any>) => Promise<any>;
-}
 
 export interface Controller<TFramework = unknown> {
 	registerRoutes: (framework: TFramework) => void;
