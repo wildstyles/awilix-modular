@@ -173,7 +173,7 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	providers: ToResolverProviderMap<Def["providers"], ExtractDeps<Def>>;
 	exports: ToResolverProviderMap<Def["exports"], ExtractDeps<Def>>;
 	queryHandlers?: HandlerConstructor[];
-	controllers?: ControllerConstructor[];
+	controllers?: ControllerConstructor<any>[];
 };
 
 type DynamicModule<TDef extends DynamicModuleDef> = {
