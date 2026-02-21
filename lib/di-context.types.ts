@@ -192,9 +192,9 @@ type DynamicModule<TDef extends DynamicModuleDef> = {
 export type Module<TDef extends BaseModuleDef & Partial<WithForRootConfig>> =
 	TDef extends WithForRootConfig ? DynamicModule<TDef> : StaticModule<TDef>;
 
-// ============================================================================
+// ===========================================================================
 // Narrow type checks
-// ============================================================================
+// ===========================================================================
 //
 
 export function isFactoryProvider<T extends object>(
