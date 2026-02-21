@@ -153,20 +153,20 @@ type ExtractDeps<Def> = Def extends {
 	: Record<string, unknown>;
 
 export type HandlerConstructor = {
-	new (...args: any[]): AnyHandler;
+	new (...args: any[]): Handler;
 };
 
-export type ControllerConstructor = {
-	new (...args: any[]): AnyController;
+export type ControllerConstructor<TFramework = unknown> = {
+	new (...args: any[]): Controller<TFramework>;
 };
 
-export interface AnyHandler {
+export interface Handler {
 	readonly key: string;
 	executor: (payload: any, meta: Record<string, any>) => Promise<any>;
 }
 
-export interface AnyController {
-	registerRoutes: (app: any) => void;
+export interface Controller<TFramework = unknown> {
+	registerRoutes: (framework: TFramework) => void;
 }
 
 export type StaticModule<Def extends StaticModuleDef> = {
