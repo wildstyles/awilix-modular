@@ -41,7 +41,7 @@ type FactoryProvider<
 	Keys extends readonly (keyof DepsMap)[],
 	Strict extends boolean = true,
 > = {
-	provide: Resolver<T>;
+	provide: Resolver<T> | ClassProvider<T> | ClassConstructor<T>;
 	inject?: Keys;
 	useFactory: Strict extends true
 		? (...args: MapKeysToValues<DepsMap, Keys>) => T
