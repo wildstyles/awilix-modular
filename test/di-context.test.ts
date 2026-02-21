@@ -1,14 +1,19 @@
 import { asClass, asValue, createContainer } from "awilix";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { DIContext } from "../lib/di-context.js";
-import type { AnyModule } from "../lib/di-context.types.js";
+import type { AnyModule, Controller } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
 	let diContext: DIContext;
+	let onControllerMock: Mock;
+
+	class ControllerBase implements Controller {
+		registerRoutes() {}
+	}
 
 	class TestableBase {
-		// biome-ignore lint/suspicious/noExplicitAny: Test helper accepts any dependencies
 		constructor(private deps?: any) {}
 
 		getDepKeys() {
@@ -34,8 +39,10 @@ describe("DIContext", () => {
 	const rootResolversCount = Object.keys(rootContainerResolvers).length;
 
 	beforeEach(() => {
+		onControllerMock = vi.fn();
 		diContext = new DIContext(
 			createContainer().register(rootContainerResolvers),
+			{ onController: onControllerMock },
 		);
 	});
 
@@ -278,6 +285,117 @@ describe("DIContext", () => {
 			expect(localService.getDepKeys()).toContain("sharedService");
 			expect(localService.getDepKeys()).not.toContain("internalService");
 			expect(localService.getDepKeys()).not.toContain("internalService1");
+		});
+	});
+
+	describe("Controller Registration", () => {
+		class TestController extends ControllerBase {}
+		class AnotherController extends ControllerBase {}
+
+		it("should call onController callback for each controller in a module", () => {
+			const moduleWithControllers: AnyModule = {
+				...anyModule,
+				name: "ControllerModule",
+				controllers: [TestController, AnotherController],
+			};
+
+			diContext.registerModules([moduleWithControllers]);
+
+			expect(onControllerMock).toHaveBeenCalledTimes(2);
+			expect(onControllerMock).toHaveBeenCalledWith(
+				TestController,
+				expect.any(Object),
+			);
+			expect(onControllerMock).toHaveBeenCalledWith(
+				AnotherController,
+				expect.any(Object),
+			);
+		});
+
+		it("should pass the correct scope to onController callback", () => {
+			const moduleWithController: AnyModule = {
+				...anyModule,
+				name: "ScopedControllerModule",
+				providers: {
+					testService: asClass(class TestService extends TestableBase {}),
+				},
+				controllers: [TestController],
+			};
+
+			diContext.registerModules([moduleWithController]);
+
+			expect(onControllerMock).toHaveBeenCalledTimes(1);
+
+			const [, scope] = onControllerMock.mock.calls[0];
+			expect(scope.hasRegistration("testService")).toBeTruthy();
+			expect(scope.resolve("testService").getName()).toBe("TestService");
+		});
+
+		it("should throw an error when a controller is registered in multiple modules", () => {
+			const firstModule: AnyModule = {
+				...anyModule,
+				name: "FirstModule",
+				controllers: [TestController],
+			};
+
+			const secondModule: AnyModule = {
+				...anyModule,
+				name: "SecondModule",
+				controllers: [TestController],
+			};
+
+			expect(() => {
+				diContext.registerModules([firstModule, secondModule]);
+			}).toThrow(
+				'Controller "TestController" is already registered in module "FirstModule". Attempted to register again in module "SecondModule".',
+			);
+		});
+
+		it("should not call onController callback when no controllers are defined", () => {
+			const moduleWithoutControllers: AnyModule = {
+				...anyModule,
+				name: "NoControllerModule",
+				providers: {
+					testService: asClass(class TestService extends TestableBase {}),
+				},
+			};
+
+			diContext.registerModules([moduleWithoutControllers]);
+
+			expect(onControllerMock).not.toHaveBeenCalled();
+		});
+
+		it("should call onController for controllers in modules with imports", () => {
+			const importedModule: AnyModule = {
+				...anyModule,
+				name: "ImportedModule",
+				providers: {
+					sharedService: asClass(class SharedService extends TestableBase {}),
+				},
+				exports: {
+					sharedService: asClass(class SharedService extends TestableBase {}),
+				},
+				controllers: [TestController],
+			};
+
+			const mainModule: AnyModule = {
+				...anyModule,
+				name: "MainModule",
+				imports: [importedModule],
+				controllers: [AnotherController],
+			};
+
+			diContext.registerModules([mainModule]);
+
+			expect(onControllerMock).toHaveBeenCalledTimes(2);
+			expect(onControllerMock).toHaveBeenCalledWith(
+				TestController,
+				expect.any(Object),
+			);
+			expect(onControllerMock).toHaveBeenCalledWith(
+				AnotherController,
+				expect.any(Object),
+			);
 		});
 	});
 });

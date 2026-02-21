@@ -1,3 +1,5 @@
+export type { Contract, Handler } from "./lib/cqrs.types.ts";
+
 export { DIContext } from "./lib/di-context.js";
 
 export type {
