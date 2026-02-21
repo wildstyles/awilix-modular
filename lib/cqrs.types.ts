@@ -9,10 +9,7 @@ type Meta = Record<string, unknown>;
 
 type AnyContract = Contract<string, unknown, unknown>;
 
-export interface Handler<
-	C extends AnyContract = AnyContract,
-	K extends keyof C = keyof C,
-> {
+export interface Handler<C extends AnyContract, K extends keyof C = keyof C> {
 	readonly key: K;
 	executor: Executor<ExtractPayload<C, K>, ExtractResponse<C, K>>;
 }
