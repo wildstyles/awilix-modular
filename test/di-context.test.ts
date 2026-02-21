@@ -1,4 +1,10 @@
-import { asClass, asValue, createContainer } from "awilix";
+import {
+	asClass,
+	asValue,
+	type BuildResolverOptions,
+	createContainer,
+	Lifetime,
+} from "awilix";
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -220,6 +226,65 @@ describe("DIContext", () => {
 			const scope = diContext.moduleScopes.get("TestModule");
 
 			expect(scope?.resolve("testService").getName()).toBe("TestService");
+		});
+
+		it("should register a ClassConstructor directly with default context settings", () => {
+			class DirectClassService extends TestableBase {}
+
+			diContext.registerModules([
+				{
+					...anyModule,
+					name: "ClassConstructorModule",
+					providers: {
+						directClassService: DirectClassService,
+					},
+				},
+			]);
+
+			const scope = diContext.moduleScopes.get("ClassConstructorModule");
+
+			expect(scope?.hasRegistration("directClassService")).toBeTruthy();
+			expect(scope?.resolve("directClassService").getName()).toBe(
+				"DirectClassService",
+			);
+			expect(scope?.registrations.directClassService.lifetime).toBe(
+				Lifetime.SCOPED,
+			);
+		});
+
+		it("should register a ClassProvider using useClass with provided settings", () => {
+			class ServiceWithClassProvider extends TestableBase {}
+			const injectorFn = vi.fn(() => ({ injected: true }));
+
+			diContext.registerModules([
+				{
+					...anyModule,
+					name: "ClassProviderModule",
+					providerOptions: {
+						lifetime: Lifetime.TRANSIENT,
+					},
+					providers: {
+						classProviderService: {
+							injector: injectorFn,
+							useClass: ServiceWithClassProvider,
+						},
+					},
+				},
+			]);
+
+			const scope = diContext.moduleScopes.get("ClassProviderModule");
+
+			expect(scope?.hasRegistration("classProviderService")).toBeTruthy();
+			expect(scope?.resolve("classProviderService").getName()).toBe(
+				"ServiceWithClassProvider",
+			);
+			expect(scope?.registrations.classProviderService.lifetime).toBe(
+				Lifetime.TRANSIENT,
+			);
+			expect(
+				(scope?.registrations.classProviderService as BuildResolverOptions<any>)
+					.injector,
+			).toBe(injectorFn);
 		});
 	});
 
