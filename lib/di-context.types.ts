@@ -24,7 +24,6 @@ type ToResolverProviderMap<
 // TODO: make any class constructor instead of object
 type ProviderMap = Record<string, object>;
 
-// biome-ignore lint/suspicious/noExplicitAny: Generic module type accepts any definition
 export type AnyModule = StaticModule<ModuleDef<any>>;
 
 // Helper type to map dependency keys to their actual types
@@ -45,8 +44,7 @@ type FactoryProvider<
 	inject?: Keys;
 	useFactory: Strict extends true
 		? (...args: MapKeysToValues<DepsMap, Keys>) => T
-		: // biome-ignore lint/suspicious/noExplicitAny: Non-strict factory accepts any args
-			(...args: any[]) => T;
+		: (...args: any[]) => T;
 };
 
 type Provider<
@@ -124,7 +122,6 @@ export type ModuleDef<
 } & ResolveForRootConfig<D>;
 
 export type ExtractModuleDef<T> = T extends {
-	// biome-ignore lint/suspicious/noExplicitAny: forRoot can accept any arguments
 	forRoot: (...args: any[]) => infer R;
 }
 	? R
@@ -155,14 +152,21 @@ type ExtractDeps<Def> = Def extends {
 	? D
 	: Record<string, unknown>;
 
-export type AnyHandlerConstructor = {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type HandlerConstructor = {
 	new (...args: any[]): AnyHandler;
+};
+
+export type ControllerConstructor = {
+	new (...args: any[]): AnyController;
 };
 
 export interface AnyHandler {
 	readonly key: string;
 	executor: (payload: any, meta: Record<string, any>) => Promise<any>;
+}
+
+export interface AnyController {
+	registerRoutes: (app: any) => void;
 }
 
 export type StaticModule<Def extends StaticModuleDef> = {
@@ -172,7 +176,8 @@ export type StaticModule<Def extends StaticModuleDef> = {
 		: readonly [];
 	providers: ToResolverProviderMap<Def["providers"], ExtractDeps<Def>>;
 	exports: ToResolverProviderMap<Def["exports"], ExtractDeps<Def>>;
-	queryHandlers?: AnyHandlerConstructor[];
+	queryHandlers?: HandlerConstructor[];
+	controllers?: ControllerConstructor[];
 };
 
 type DynamicModule<TDef extends DynamicModuleDef> = {
@@ -189,7 +194,6 @@ export type Module<TDef extends BaseModuleDef & Partial<WithForRootConfig>> =
 
 export function isFactoryProvider<T extends object>(
 	provider: unknown,
-	// biome-ignore lint/suspicious/noExplicitAny: Type guard accepts any dependency map
 ): provider is FactoryProvider<T, any, readonly string[], false> {
 	return (
 		typeof provider === "object" &&
@@ -206,7 +210,6 @@ export function isResolver<T extends object>(
 	);
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Generic factory accepts any dependency types
 export function createFactoryProvider<DepsMap extends Record<string, any>>() {
 	return <T extends object, const Keys extends readonly (keyof DepsMap)[]>(
 		provider: FactoryProvider<T, DepsMap, Keys>,

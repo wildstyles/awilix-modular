@@ -1,8 +1,9 @@
 import { type AwilixContainer, asValue } from "awilix";
 
 import {
-	type AnyHandlerConstructor,
 	type AnyModule,
+	type ControllerConstructor,
+	type HandlerConstructor,
 	isFactoryProvider,
 	isResolver,
 	type MandatoryNameAndRegistrationPair,
@@ -14,19 +15,30 @@ type ProdiderDepsGraph = {
 };
 
 type HandlerCallbackFn = (
-	HandlerClass: AnyHandlerConstructor,
+	HandlerClass: HandlerConstructor,
 	scope: AwilixContainer,
 ) => void;
+
+type ControllerCallbackFn = (
+	ControllerClass: ControllerConstructor,
+	scope: AwilixContainer,
+) => void;
+
+interface DiContextOptions {
+	onHandler?: HandlerCallbackFn;
+	onController?: ControllerCallbackFn;
+}
 
 export class DIContext<M extends AnyModule = AnyModule> {
 	// TODO: do scope caching for dynamic modules
 	public readonly moduleScopes = new Map<string, AwilixContainer>();
 	private readonly rootContainer: AwilixContainer;
-	private readonly onHandler?: HandlerCallbackFn;
 
-	constructor(rootContainer: AwilixContainer, onHandler?: HandlerCallbackFn) {
+	constructor(
+		rootContainer: AwilixContainer,
+		private readonly options?: DiContextOptions,
+	) {
 		this.rootContainer = rootContainer;
-		this.onHandler = onHandler;
 	}
 
 	registerModules(modules: M[]) {
@@ -34,18 +46,9 @@ export class DIContext<M extends AnyModule = AnyModule> {
 			const scope = this.rootContainer.createScope();
 
 			this.registerProvidersWithImports(module, scope);
-			this.processQueryHandlers(module, scope);
 
 			return { scope, name: module.name };
 		});
-	}
-
-	private processQueryHandlers(m: M, scope: AwilixContainer) {
-		if (!this.onHandler) return;
-
-		for (const HandlerClass of m.queryHandlers || []) {
-			this.onHandler(HandlerClass, scope);
-		}
 	}
 
 	private registerProvidersWithImports(m: M, targetScope?: AwilixContainer) {
@@ -111,7 +114,26 @@ export class DIContext<M extends AnyModule = AnyModule> {
 
 		this.moduleScopes.set(m.name, scope);
 
+		this.processQueryHandlers(m, scope);
+		this.processControllers(m, scope);
+
 		return scope;
+	}
+
+	private processQueryHandlers(m: M, scope: AwilixContainer) {
+		if (!this.options?.onHandler) return;
+
+		for (const HandlerClass of m.queryHandlers || []) {
+			this.options.onHandler(HandlerClass, scope);
+		}
+	}
+
+	private processControllers(m: M, diScope: AwilixContainer) {
+		if (!this.options?.onController) return;
+
+		for (const ControllerClass of m.controllers || []) {
+			this.options.onController(ControllerClass, diScope);
+		}
 	}
 
 	private sortProvidersByDependencies(m: M): typeof m.providers {
