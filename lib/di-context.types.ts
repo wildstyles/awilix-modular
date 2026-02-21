@@ -1,4 +1,4 @@
-import type { Resolver } from "awilix";
+import type { BuildResolverOptions, Resolver } from "awilix";
 import type { Handler } from "./cqrs.types.ts";
 
 // ============================================================================
@@ -48,12 +48,20 @@ type FactoryProvider<
 		: (...args: any[]) => T;
 };
 
+type ClassProvider<T extends object> = {
+	useClass: new (...args: any[]) => T;
+} & BuildResolverOptions<T>;
+
+type ClassConstructor<T extends object = object> = new (...args: any[]) => T;
+
 type Provider<
 	T extends object,
 	DepsMap extends Record<string, unknown> = Record<string, unknown>,
 > =
 	| Resolver<T>
-	| FactoryProvider<T, DepsMap, readonly (keyof DepsMap)[], false>;
+	| FactoryProvider<T, DepsMap, readonly (keyof DepsMap)[], false>
+	| ClassProvider<T>
+	| ClassConstructor<T>;
 
 // ============================================================================
 // Typed module definition with deps
@@ -174,6 +182,7 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	exports: ToResolverProviderMap<Def["exports"], ExtractDeps<Def>>;
 	queryHandlers?: HandlerConstructor[];
 	controllers?: ControllerConstructor<any>[];
+	providerOptions?: Partial<BuildResolverOptions<any>>;
 };
 
 type DynamicModule<TDef extends DynamicModuleDef> = {
@@ -196,6 +205,20 @@ export function isFactoryProvider<T extends object>(
 		provider !== null &&
 		"useFactory" in provider
 	);
+}
+
+export function isClassProvider<T extends object>(
+	provider: unknown,
+): provider is ClassProvider<T> {
+	return (
+		typeof provider === "object" && provider !== null && "useClass" in provider
+	);
+}
+
+export function isClassConstructor<T extends object>(
+	provider: unknown,
+): provider is ClassConstructor<T> {
+	return typeof provider === "function" && "prototype" in provider;
 }
 
 export function isResolver<T extends object>(

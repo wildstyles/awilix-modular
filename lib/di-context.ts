@@ -1,9 +1,17 @@
-import { type AwilixContainer, asValue } from "awilix";
+import {
+	type AwilixContainer,
+	asClass,
+	asValue,
+	type BuildResolverOptions,
+	Lifetime,
+} from "awilix";
 
 import {
 	type AnyModule,
 	type ControllerConstructor,
 	type HandlerConstructor,
+	isClassConstructor,
+	isClassProvider,
 	isFactoryProvider,
 	isResolver,
 	type MandatoryNameAndRegistrationPair,
@@ -23,6 +31,7 @@ interface DiContextOptions<TFramework = unknown> {
 		ControllerClass: ControllerConstructor<TFramework>,
 		scope: AwilixContainer,
 	) => void;
+	providerOptions?: Partial<BuildResolverOptions<any>>;
 }
 
 export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
@@ -33,12 +42,26 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 		ControllerConstructor<TFramework>,
 		string
 	>();
+	private readonly options: DiContextOptions<TFramework> &
+		Required<Pick<DiContextOptions, "providerOptions">> = {
+		providerOptions: {
+			lifetime: Lifetime.SCOPED,
+		},
+	};
 
 	constructor(
 		rootContainer: AwilixContainer,
-		private readonly options?: DiContextOptions<TFramework>,
+		options: DiContextOptions<TFramework> = {},
 	) {
 		this.rootContainer = rootContainer;
+		this.options = {
+			...this.options,
+			...options,
+			providerOptions: {
+				...this.options.providerOptions,
+				...options.providerOptions,
+			},
+		};
 	}
 
 	registerModules(modules: M[]) {
@@ -108,6 +131,31 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 					scope.register({
 						[key]: asValue(provider.useFactory(...factoryDeps)),
 					});
+
+					return;
+				}
+
+				if (isClassProvider(provider)) {
+					const { useClass, ...awilixOptions } = provider;
+
+					scope.register({
+						[key]: asClass(useClass, {
+							...this.options.providerOptions,
+							...m.providerOptions,
+							...awilixOptions,
+						}),
+					});
+
+					return;
+				}
+
+				if (isClassConstructor(provider)) {
+					scope.register({
+						[key]: asClass(provider, {
+							...this.options.providerOptions,
+							...m.providerOptions,
+						}),
+					});
 				}
 			},
 		);
@@ -121,17 +169,17 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 	}
 
 	private processQueryHandlers(m: M, scope: AwilixContainer) {
-		if (!this.options?.onHandler) return;
+		if (!this.options.onHandler || !m.queryHandlers?.length) return;
 
-		for (const HandlerClass of m.queryHandlers || []) {
+		for (const HandlerClass of m.queryHandlers) {
 			this.options.onHandler(HandlerClass, scope);
 		}
 	}
 
 	private processControllers(m: M, diScope: AwilixContainer) {
-		if (!this.options?.onController) return;
+		if (!this.options.onController || !m.controllers?.length) return;
 
-		for (const ControllerClass of m.controllers || []) {
+		for (const ControllerClass of m.controllers) {
 			const existingModule = this.registeredControllers.get(ControllerClass);
 
 			if (existingModule) {
