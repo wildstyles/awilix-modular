@@ -1,6 +1,6 @@
 import { asClass, asValue, createContainer } from "awilix";
 
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { DIContext } from "../lib/di-context.js";
 import type { AnyModule, Controller } from "../lib/di-context.types.js";
