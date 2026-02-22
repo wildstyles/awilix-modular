@@ -1,5 +1,4 @@
 import {
-	asClass,
 	asValue,
 	type BuildResolverOptions,
 	createContainer,
@@ -21,6 +20,10 @@ describe("DIContext", () => {
 
 	class TestableBase {
 		constructor(private deps?: any) {}
+
+		getDeps() {
+			return this.deps;
+		}
 
 		getDepKeys() {
 			return Object.keys(this.deps ?? {});
@@ -75,10 +78,10 @@ describe("DIContext", () => {
 				...anyModule,
 				name: "SharedModule",
 				providers: {
-					sharedService: asClass(class SharedService extends TestableBase {}),
+					sharedService: class SharedService extends TestableBase {},
 				},
 				exports: {
-					sharedService: asClass(class SharedService extends TestableBase {}),
+					sharedService: class SharedService extends TestableBase {},
 				},
 			};
 
@@ -87,9 +90,7 @@ describe("DIContext", () => {
 				name: "MainModule",
 				imports: [importedModule],
 				providers: {
-					sharedService: asClass(
-						class ConflictingService extends TestableBase {},
-					),
+					sharedService: class ConflictingService extends TestableBase {},
 				},
 			};
 
@@ -106,7 +107,7 @@ describe("DIContext", () => {
 				name: "InvalidFactoryModule",
 				providers: {
 					factoryService: {
-						provide: asClass(TestableBase).scoped(),
+						provide: TestableBase,
 						inject: ["nonExistentService"],
 						useFactory: () => new TestableBase(),
 					},
@@ -128,7 +129,7 @@ describe("DIContext", () => {
 				name: "FactoryModule",
 				providers: {
 					factoryService: {
-						provide: asClass(TestableBase).scoped(),
+						provide: TestableBase,
 						inject: [],
 						useFactory: () => new TestableBase(),
 					},
@@ -148,9 +149,9 @@ describe("DIContext", () => {
 				...anyModule,
 				name: "FactoryWithDepsModule",
 				providers: {
-					baseService: asClass(TestableBase),
+					baseService: TestableBase,
 					factoryService: {
-						provide: asClass(TestableBase).scoped(),
+						provide: TestableBase,
 						inject: ["baseService"],
 						useFactory: (baseService: TestableBase) =>
 							new TestableBase({ baseService }),
@@ -174,7 +175,7 @@ describe("DIContext", () => {
 				name: "OrderIndependentModule",
 				providers: {
 					factoryServiceA: {
-						provide: asClass(TestableBase).scoped(),
+						provide: TestableBase,
 						inject: ["factoryServiceB", "serviceA"],
 						useFactory: (
 							factoryServiceB: TestableBase,
@@ -182,12 +183,12 @@ describe("DIContext", () => {
 						) => new TestableBase({ factoryServiceB, serviceA }),
 					},
 					factoryServiceB: {
-						provide: asClass(TestableBase).scoped(),
+						provide: TestableBase,
 						inject: ["serviceA"],
 						useFactory: (serviceA: TestableBase) =>
 							new TestableBase({ serviceA }),
 					},
-					serviceA: asClass(class ServiceA extends TestableBase {}),
+					serviceA: class ServiceA extends TestableBase {},
 				},
 			};
 
@@ -218,7 +219,7 @@ describe("DIContext", () => {
 					...anyModule,
 					name: "TestModule",
 					providers: {
-						testService: asClass(class TestService extends TestableBase {}),
+						testService: class TestService extends TestableBase {},
 					},
 				},
 			]);
@@ -288,6 +289,53 @@ describe("DIContext", () => {
 		});
 	});
 
+	describe("Primitive Provider Registration", () => {
+		it("should register string/number primitives as values", () => {
+			diContext.registerModules([
+				{
+					...anyModule,
+					name: "StringModule",
+					providers: {
+						apiUrl: "https://api.example.com",
+						port: 3000,
+						isProduction: true,
+						debugMode: false,
+					},
+				},
+			]);
+
+			const scope = diContext.moduleScopes.get("StringModule");
+
+			expect(scope?.resolve("port")).toBe(3000);
+			expect(scope?.resolve("apiUrl")).toBe("https://api.example.com");
+			expect(scope?.resolve("isProduction")).toBe(true);
+			expect(scope?.resolve("debugMode")).toBe(false);
+		});
+
+		it("should register primitives alongside class providers", () => {
+			class ConfigService extends TestableBase {}
+
+			diContext.registerModules([
+				{
+					...anyModule,
+					name: "MixedModule",
+					providers: {
+						apiUrl: "https://api.example.com",
+						port: 8080,
+						configService: ConfigService,
+					},
+				},
+			]);
+
+			const scope = diContext.moduleScopes.get("MixedModule");
+
+			const configService = scope?.resolve("configService");
+
+			expect(configService.getDeps().port).toBe(8080);
+			expect(configService.getDeps().apiUrl).toBe("https://api.example.com");
+		});
+	});
+
 	describe("Module Imports and Exports", () => {
 		it("should make exported providers from imported module available in importing module", () => {
 			const exportedModule: AnyModule = {
@@ -297,22 +345,16 @@ describe("DIContext", () => {
 					{
 						...anyModule,
 						providers: {
-							internalService1: asClass(
-								class InternalService1 extends TestableBase {},
-							),
+							internalService1: class InternalService1 extends TestableBase {},
 						},
 						exports: {
-							internalService1: asClass(
-								class InternalService1 extends TestableBase {},
-							),
+							internalService1: class InternalService1 extends TestableBase {},
 						},
 					},
 				],
 				providers: {
 					sharedService: class SharedService extends TestableBase {},
-					internalService: asClass(
-						class InternalService extends TestableBase {},
-					),
+					internalService: class InternalService extends TestableBase {},
 				},
 				exports: {
 					sharedService: {
@@ -328,7 +370,7 @@ describe("DIContext", () => {
 					name: "ImportingModule",
 					imports: [exportedModule],
 					providers: {
-						localService: asClass(class LocalService extends TestableBase {}),
+						localService: class LocalService extends TestableBase {},
 					},
 				},
 			]);
@@ -394,7 +436,7 @@ describe("DIContext", () => {
 				...anyModule,
 				name: "ScopedControllerModule",
 				providers: {
-					testService: asClass(class TestService extends TestableBase {}),
+					testService: class TestService extends TestableBase {},
 				},
 				controllers: [TestController],
 			};
@@ -433,7 +475,7 @@ describe("DIContext", () => {
 				...anyModule,
 				name: "NoControllerModule",
 				providers: {
-					testService: asClass(class TestService extends TestableBase {}),
+					testService: class TestService extends TestableBase {},
 				},
 			};
 
@@ -447,10 +489,10 @@ describe("DIContext", () => {
 				...anyModule,
 				name: "ImportedModule",
 				providers: {
-					sharedService: asClass(class SharedService extends TestableBase {}),
+					sharedService: class SharedService extends TestableBase {},
 				},
 				exports: {
-					sharedService: asClass(class SharedService extends TestableBase {}),
+					sharedService: class SharedService extends TestableBase {},
 				},
 				controllers: [TestController],
 			};

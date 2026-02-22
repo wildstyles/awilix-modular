@@ -11,10 +11,10 @@ import {
 	type AnyModule,
 	type ControllerConstructor,
 	type HandlerConstructor,
-	isClassConstructor,
 	isClassProvider,
+	isCostructorProvider,
 	isFactoryProvider,
-	isResolver,
+	isPrimitive,
 	type MandatoryNameAndRegistrationPair,
 } from "./di-context.types.js";
 
@@ -91,9 +91,18 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 				const importedScope = this.registerProvidersWithImports(importedModule);
 
 				return Object.entries(importedModule.exports).map(([key, provider]) => {
-					const { useClass, ...awilixOptions } = isClassConstructor(provider)
+					if (isPrimitive(provider)) {
+						return {
+							key,
+							scope: null,
+							provider,
+						};
+					}
+
+					// TODO: add factory providers
+					const { useClass, ...awilixOptions } = isCostructorProvider(provider)
 						? { useClass: provider }
-						: { ...provider };
+						: { ...(provider as any) }; // TODO: remove any
 
 					return {
 						key,
@@ -109,10 +118,9 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 			})
 			.reduce<MandatoryNameAndRegistrationPair<Record<string, object>>>(
 				(acc, curr) => {
-					acc[curr.key] = asFunction(
-						() => curr.scope.build(curr.provider),
-						curr.options,
-					);
+					acc[curr.key] = curr.scope
+						? asFunction(() => curr.scope.build(curr.provider), curr.options)
+						: asValue(curr.provider as any); // TODO: remove any
 
 					return acc;
 				},
@@ -123,14 +131,13 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 
 		Object.entries(this.sortProvidersByDependencies(m)).forEach(
 			([key, provider]) => {
-				if (isResolver(provider)) {
-					// TODO: isResolver doesn't allow to register asValue resolvers
-					scope.register({ [key]: provider });
-
-					return;
-				}
-
 				if (isFactoryProvider(provider)) {
+					const { useClass, ...awilixOptions } = isClassProvider(
+						provider.provide,
+					)
+						? provider.provide
+						: {};
+
 					const factoryDeps = (provider.inject || []).map((key) => {
 						if (!scope.registrations[key]) {
 							throw new Error(`Provider ${key} is not exist in ${m.name}`);
@@ -140,7 +147,11 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 					});
 
 					scope.register({
-						[key]: asValue(provider.useFactory(...factoryDeps)),
+						[key]: asFunction(() => provider.useFactory(...factoryDeps), {
+							...this.options.providerOptions,
+							...m.providerOptions,
+							...awilixOptions,
+						}),
 					});
 
 					return;
@@ -160,12 +171,20 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 					return;
 				}
 
-				if (isClassConstructor(provider)) {
+				if (isCostructorProvider(provider)) {
 					scope.register({
 						[key]: asClass(provider, {
 							...this.options.providerOptions,
 							...m.providerOptions,
 						}),
+					});
+
+					return;
+				}
+
+				if (isPrimitive(provider)) {
+					scope.register({
+						[key]: asValue(provider),
 					});
 				}
 			},
@@ -218,7 +237,8 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 
 		return sortedKeys.reduce<typeof m.providers>((acc, key) => {
 			const provider = m.providers[key];
-			if (provider) acc[key] = provider;
+			// Provider might be boolean. That's why not only undefined check
+			if (provider !== undefined) acc[key] = provider;
 
 			return acc;
 		}, {});

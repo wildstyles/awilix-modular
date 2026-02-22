@@ -13,7 +13,7 @@ export type MandatoryNameAndRegistrationPair<T> = {
 	[U in keyof T]: Resolver<T[U]>;
 };
 
-type ToResolverProviderMap<
+type ToProviderMap<
 	T extends ProviderMap,
 	DepsMap extends Record<string, unknown> = Record<string, unknown>,
 > = [keyof T] extends [never]
@@ -41,7 +41,7 @@ type FactoryProvider<
 	Keys extends readonly (keyof DepsMap)[],
 	Strict extends boolean = true,
 > = {
-	provide: Resolver<T> | ClassProvider<T> | ClassConstructor<T>;
+	provide: ClassProvider<T> | ConstructorProvider<T>;
 	inject?: Keys;
 	useFactory: Strict extends true
 		? (...args: MapKeysToValues<DepsMap, Keys>) => T
@@ -52,16 +52,18 @@ type ClassProvider<T extends object> = {
 	useClass: new (...args: any[]) => T;
 } & BuildResolverOptions<T>;
 
-type ClassConstructor<T extends object = object> = new (...args: any[]) => T;
+type ConstructorProvider<T extends object = object> = new (...args: any[]) => T;
+
+type PrimitiveProvider = string | number | boolean | symbol | bigint;
 
 type Provider<
 	T extends object,
 	DepsMap extends Record<string, unknown> = Record<string, unknown>,
 > =
-	| Resolver<T>
 	| FactoryProvider<T, DepsMap, readonly (keyof DepsMap)[], false>
 	| ClassProvider<T>
-	| ClassConstructor<T>;
+	| ConstructorProvider<T>
+	| PrimitiveProvider;
 
 // ============================================================================
 // Typed module definition with deps
@@ -178,8 +180,8 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	imports: Def["imports"] extends AnyModule[]
 		? readonly [...Def["imports"]]
 		: readonly [];
-	providers: ToResolverProviderMap<Def["providers"], ExtractDeps<Def>>;
-	exports: ToResolverProviderMap<Def["exports"], ExtractDeps<Def>>;
+	providers: ToProviderMap<Def["providers"], ExtractDeps<Def>>;
+	exports: ToProviderMap<Def["exports"], ExtractDeps<Def>>;
 	queryHandlers?: HandlerConstructor[];
 	controllers?: ControllerConstructor<any>[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
@@ -215,17 +217,19 @@ export function isClassProvider<T extends object>(
 	);
 }
 
-export function isClassConstructor<T extends object>(
+export function isCostructorProvider<T extends object>(
 	provider: unknown,
-): provider is ClassConstructor<T> {
+): provider is ConstructorProvider<T> {
 	return typeof provider === "function" && "prototype" in provider;
 }
 
-export function isResolver<T extends object>(
-	provider: unknown,
-): provider is Resolver<T> {
+export function isPrimitive(provider: unknown): provider is PrimitiveProvider {
 	return (
-		typeof provider === "object" && provider !== null && "resolve" in provider
+		typeof provider === "string" ||
+		typeof provider === "number" ||
+		typeof provider === "boolean" ||
+		typeof provider === "symbol" ||
+		typeof provider === "bigint"
 	);
 }
 
