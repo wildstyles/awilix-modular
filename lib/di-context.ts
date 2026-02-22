@@ -1,6 +1,7 @@
 import {
 	type AwilixContainer,
 	asClass,
+	asFunction,
 	asValue,
 	type BuildResolverOptions,
 	Lifetime,
@@ -89,19 +90,29 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 			.flatMap((importedModule) => {
 				const importedScope = this.registerProvidersWithImports(importedModule);
 
-				return Object.entries(importedScope.registrations)
-					.filter(([key]) => key in importedModule.exports)
-					.map(([key, registration]) => ({
+				return Object.entries(importedModule.exports).map(([key, provider]) => {
+					const { useClass, ...awilixOptions } = isClassConstructor(provider)
+						? { useClass: provider }
+						: { ...provider };
+
+					return {
 						key,
-						registration,
+						provider: useClass,
 						scope: importedScope,
-					}));
+						options: {
+							...this.options.providerOptions,
+							...importedModule.providerOptions,
+							...awilixOptions,
+						},
+					};
+				});
 			})
 			.reduce<MandatoryNameAndRegistrationPair<Record<string, object>>>(
 				(acc, curr) => {
-					acc[curr.key] = isResolver(curr.registration)
-						? asValue(curr.registration.resolve(curr.scope))
-						: curr.registration;
+					acc[curr.key] = asFunction(
+						() => curr.scope.build(curr.provider),
+						curr.options,
+					);
 
 					return acc;
 				},

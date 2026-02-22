@@ -309,13 +309,16 @@ describe("DIContext", () => {
 					},
 				],
 				providers: {
-					sharedService: asClass(class SharedService extends TestableBase {}),
+					sharedService: class SharedService extends TestableBase {},
 					internalService: asClass(
 						class InternalService extends TestableBase {},
 					),
 				},
 				exports: {
-					sharedService: asClass(class SharedService extends TestableBase {}),
+					sharedService: {
+						useClass: class SharedService extends TestableBase {},
+						lifetime: Lifetime.TRANSIENT,
+					},
 				},
 			};
 
@@ -331,8 +334,17 @@ describe("DIContext", () => {
 			]);
 
 			const scope = diContext.moduleScopes.get("ImportingModule");
+			const exportedScope = diContext.moduleScopes.get("ExportedModule");
+
 			const localService = scope?.resolve("localService");
-			const sharedService = scope?.resolve("sharedService");
+			const sharedServiceExported = scope?.resolve("sharedService");
+
+			expect(scope?.registrations.sharedService.lifetime).toBe(
+				Lifetime.TRANSIENT,
+			);
+			expect(exportedScope?.registrations.sharedService.lifetime).toBe(
+				Lifetime.SCOPED,
+			);
 
 			expect(scope?.hasRegistration("sharedService")).toBeTruthy();
 			// internal provider is NOT exported and should be unavailable
@@ -340,11 +352,11 @@ describe("DIContext", () => {
 			// imports of imported are also should be unavailable
 			expect(scope?.hasRegistration("internalService1")).toBeFalsy();
 
-			expect(sharedService.getName()).toBe("SharedService");
-			expect(sharedService.getDepKeys()).toContain("internalService");
-			expect(sharedService.getDepKeys()).toContain("internalService1");
+			expect(sharedServiceExported.getName()).toBe("SharedService");
+			expect(sharedServiceExported.getDepKeys()).toContain("internalService");
+			expect(sharedServiceExported.getDepKeys()).toContain("internalService1");
 			// imported module scope knowns nothing about it's host
-			expect(sharedService.getDepKeys()).not.toContain("localService");
+			expect(sharedServiceExported.getDepKeys()).not.toContain("localService");
 
 			expect(localService.getName()).toBe("LocalService");
 			expect(localService.getDepKeys()).toContain("sharedService");
