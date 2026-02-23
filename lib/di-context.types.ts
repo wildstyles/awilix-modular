@@ -174,7 +174,7 @@ type ExtractDeps<Def> = Def extends {
 	: Record<string, unknown>;
 
 export type HandlerConstructor = {
-	new (...args: any[]): Handler<any>;
+	new (...args: any[]): Handler<any, string>;
 };
 
 export type ControllerConstructor<TFramework = unknown> = {

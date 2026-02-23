@@ -381,6 +381,7 @@ describe("DIContext", () => {
 			const localService = scope?.resolve("localService");
 			const sharedServiceExported = scope?.resolve("sharedService");
 
+			// checks that settings for exported provider are independant of local one
 			expect(scope?.registrations.sharedService.lifetime).toBe(
 				Lifetime.TRANSIENT,
 			);
@@ -404,6 +405,95 @@ describe("DIContext", () => {
 			expect(localService.getDepKeys()).toContain("sharedService");
 			expect(localService.getDepKeys()).not.toContain("internalService");
 			expect(localService.getDepKeys()).not.toContain("internalService1");
+		});
+	});
+
+	describe("Dynamic Module Registration", () => {
+		it("should register a dynamic module created via forRoot", () => {
+			class Service1 extends TestableBase {}
+
+			const DatabaseModule = {
+				forRoot(config: { host: string; port: number }): AnyModule {
+					return {
+						...anyModule,
+						name: "DatabaseModule",
+						providers: {
+							host: config.host,
+							port: config.port,
+							service2: class Service2 extends TestableBase {},
+							service1: {
+								provide: class Service1 {},
+								inject: ["host", "port"],
+								useFactory: (host: string, port: number) =>
+									new Service1({ host, port }),
+							},
+						},
+					};
+				},
+			};
+
+			diContext.registerModules([
+				DatabaseModule.forRoot({
+					host: "localhost",
+					port: 5432,
+				}),
+			]);
+
+			const scope = diContext.moduleScopes.get("DatabaseModule");
+			const service1 = scope?.resolve("service1");
+			const service2 = scope?.resolve("service2");
+
+			expect(service1.getDeps()).toEqual({ host: "localhost", port: 5432 });
+			expect(service2.getDeps().host).toEqual("localhost");
+			expect(service2.getDeps().port).toEqual(5432);
+		});
+
+		it("should allow multiple instances of the same dynamic module with different configs", () => {});
+
+		it("should use cached scope for already built module on second import", () => {});
+
+		it("should allow importing a dynamic module's exports in other modules", () => {
+			const LoggerModule = {
+				forRoot(config: { level: string }): AnyModule {
+					return {
+						...anyModule,
+						name: "LoggerModule",
+						providers: {
+							level: config.level,
+							loggerService: class LoggerService extends TestableBase {},
+						},
+						exports: {
+							loggerService: class LoggerService extends TestableBase {},
+						},
+					};
+				},
+			};
+
+			const AppModule = {
+				forRoot(): AnyModule {
+					return {
+						...anyModule,
+						name: "AppModule",
+						imports: [
+							LoggerModule.forRoot({
+								level: "debug",
+							}),
+						],
+						providers: {
+							appService: class AppService extends TestableBase {},
+						},
+					};
+				},
+			};
+
+			diContext.registerModules([AppModule.forRoot()]);
+
+			const appScope = diContext.moduleScopes.get("AppModule");
+			const appService = appScope?.resolve("appService");
+			const loggerService = appScope?.resolve("loggerService");
+
+			expect(appService.getDepKeys()).toContain("loggerService");
+			expect(loggerService.getDeps().level).toBe("debug");
 		});
 	});
 
