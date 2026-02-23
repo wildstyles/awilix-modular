@@ -1,20 +1,21 @@
 import {
 	type AwilixContainer,
 	asClass,
+	asFunction,
 	asValue,
 	type BuildResolverOptions,
 	Lifetime,
+	type Resolver,
 } from "awilix";
 
 import {
-	type AnyModule,
 	type ControllerConstructor,
 	type HandlerConstructor,
-	isClassConstructor,
 	isClassProvider,
+	isCostructorProvider,
 	isFactoryProvider,
-	isResolver,
-	type MandatoryNameAndRegistrationPair,
+	isPrimitive,
+	type AnyModule as M,
 } from "./di-context.types.js";
 
 type ProdiderDepsGraph = {
@@ -34,7 +35,7 @@ interface DiContextOptions<TFramework = unknown> {
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 }
 
-export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
+export class DIContext<TFramework = unknown> {
 	// TODO: do scope caching for dynamic modules
 	public readonly moduleScopes = new Map<string, AwilixContainer>();
 	private readonly rootContainer: AwilixContainer;
@@ -89,37 +90,69 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 			.flatMap((importedModule) => {
 				const importedScope = this.registerProvidersWithImports(importedModule);
 
-				return Object.entries(importedScope.registrations)
-					.filter(([key]) => key in importedModule.exports)
-					.map(([key, registration]) => ({
-						key,
-						registration,
-						scope: importedScope,
-					}));
-			})
-			.reduce<MandatoryNameAndRegistrationPair<Record<string, object>>>(
-				(acc, curr) => {
-					acc[curr.key] = isResolver(curr.registration)
-						? asValue(curr.registration.resolve(curr.scope))
-						: curr.registration;
+				return Object.entries(importedModule.exports).map(([key, provider]) => {
+					const options = {
+						...this.options.providerOptions,
+						...importedModule.providerOptions,
+					};
 
-					return acc;
-				},
-				{},
-			);
+					if (isPrimitive(provider)) {
+						return {
+							key,
+							scope: null,
+							provider,
+							options,
+						};
+					}
+
+					// TODO: add factory providers
+					if (isCostructorProvider(provider)) {
+						return {
+							key,
+							provider,
+							scope: importedScope,
+							options,
+						};
+					}
+
+					if (isClassProvider(provider)) {
+						const { useClass, ...awilixOptions } = provider;
+
+						return {
+							key,
+							provider: useClass,
+							scope: importedScope,
+							options: {
+								...options,
+								...awilixOptions,
+							},
+						};
+					}
+
+					throw new Error(
+						`Unsupported provider type for "${key}" in module "${importedModule.name}"`,
+					);
+				});
+			})
+			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
+				acc[curr.key] = curr.scope
+					? asFunction(() => curr.scope.build(curr.provider), curr.options)
+					: asValue(curr.provider);
+
+				return acc;
+			}, {});
 
 		scope.register(resolvedExportedFromImports);
 
 		Object.entries(this.sortProvidersByDependencies(m)).forEach(
 			([key, provider]) => {
-				if (isResolver(provider)) {
-					// TODO: isResolver doesn't allow to register asValue resolvers
-					scope.register({ [key]: provider });
-
-					return;
-				}
-
 				if (isFactoryProvider(provider)) {
+					const { useClass, ...awilixOptions } = isClassProvider(
+						provider.provide,
+					)
+						? provider.provide
+						: {};
+
 					const factoryDeps = (provider.inject || []).map((key) => {
 						if (!scope.registrations[key]) {
 							throw new Error(`Provider ${key} is not exist in ${m.name}`);
@@ -129,7 +162,11 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 					});
 
 					scope.register({
-						[key]: asValue(provider.useFactory(...factoryDeps)),
+						[key]: asFunction(() => provider.useFactory(...factoryDeps), {
+							...this.options.providerOptions,
+							...m.providerOptions,
+							...awilixOptions,
+						}),
 					});
 
 					return;
@@ -149,12 +186,20 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 					return;
 				}
 
-				if (isClassConstructor(provider)) {
+				if (isCostructorProvider(provider)) {
 					scope.register({
 						[key]: asClass(provider, {
 							...this.options.providerOptions,
 							...m.providerOptions,
 						}),
+					});
+
+					return;
+				}
+
+				if (isPrimitive(provider)) {
+					scope.register({
+						[key]: asValue(provider),
 					});
 				}
 			},
@@ -207,7 +252,8 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 
 		return sortedKeys.reduce<typeof m.providers>((acc, key) => {
 			const provider = m.providers[key];
-			if (provider) acc[key] = provider;
+			// Provider might be boolean. That's why not only undefined check
+			if (provider !== undefined) acc[key] = provider;
 
 			return acc;
 		}, {});
