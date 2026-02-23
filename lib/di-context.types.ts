@@ -9,6 +9,22 @@ declare const emptyObjectSymbol: unique symbol;
 type EmptyObject = { [emptyObjectSymbol]?: never };
 type UnknownRecord = Record<PropertyKey, unknown>;
 
+/**
+ * Common dependencies available to all modules.
+ * Can be extended via declaration merging in consuming projects.
+ *
+ * @example
+ * ```ts
+ * declare module "awilix-modular" {
+ *   interface CommonDependencies {
+ *     config: EnvConfig;
+ *     logger: Logger;
+ *   }
+ * }
+ * ```
+ */
+export interface CommonDependencies extends UnknownRecord {}
+
 type ToProviderMap<
 	T extends ProviderMap,
 	DepsMap extends Record<string, unknown> = Record<string, unknown>,
@@ -99,7 +115,6 @@ type ResolveDeps<
 		providers?: ProviderMap;
 		imports?: AnyModule[];
 	},
-	CommonDependencies extends UnknownRecord,
 > = ResolveProviders<D> &
 	(D["imports"] extends AnyModule[]
 		? ExtractExportsFromImports<D["imports"]>
@@ -120,12 +135,11 @@ export type ModuleDef<
 		imports?: AnyModule[];
 		forRootConfig?: UnknownRecord;
 	},
-	CommonDependencies extends UnknownRecord = UnknownRecord,
 > = {
 	providers: ResolveProviders<D>;
 	exports: ResolveExports<D>;
 	imports: ResolveImports<D>;
-	deps: ResolveDeps<D, CommonDependencies>;
+	deps: ResolveDeps<D>;
 } & ResolveForRootConfig<D>;
 
 export type ExtractModuleDef<T> = T extends {
