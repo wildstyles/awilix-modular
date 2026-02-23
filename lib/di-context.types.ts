@@ -6,7 +6,7 @@ import type { Handler } from "./cqrs.types.ts";
 // ============================================================================
 // https://github.com/sindresorhus/type-fest/blob/main/source/empty-object.d.ts
 declare const emptyObjectSymbol: unique symbol;
-type EmptyObject = { [emptyObjectSymbol]?: never };
+export type EmptyObject = { [emptyObjectSymbol]?: never };
 type UnknownRecord = Record<PropertyKey, unknown>;
 
 /**

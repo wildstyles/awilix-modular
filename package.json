@@ -13,7 +13,9 @@
 		"lint": "biome check .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage"
+		"test:coverage": "vitest run --coverage",
+		"test:types": "tstyche",
+		"test:types:watch": "tstyche --watch"
 	},
 	"peerDependencies": {
 		"awilix": ">=9.0.0"
@@ -23,9 +25,11 @@
 		"@types/node": "^22.15.21",
 		"@vitest/coverage-v8": "^4.0.18",
 		"del-cli": "^7.0.0",
+		"tstyche": "^5.0.2",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.18"
 	},
+	"type": "module",
 	"repository": {
 		"type": "git",
 		"url": "git://github.com/wildstyles/awilix-modular.git"
