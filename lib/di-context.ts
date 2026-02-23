@@ -9,13 +9,13 @@ import {
 } from "awilix";
 
 import {
-	type AnyModule as M,
 	type ControllerConstructor,
 	type HandlerConstructor,
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
 	isPrimitive,
+	type AnyModule as M,
 } from "./di-context.types.js";
 
 type ProdiderDepsGraph = {
@@ -91,29 +91,47 @@ export class DIContext<TFramework = unknown> {
 				const importedScope = this.registerProvidersWithImports(importedModule);
 
 				return Object.entries(importedModule.exports).map(([key, provider]) => {
+					const options = {
+						...this.options.providerOptions,
+						...importedModule.providerOptions,
+					};
+
 					if (isPrimitive(provider)) {
 						return {
 							key,
 							scope: null,
 							provider,
+							options,
 						};
 					}
 
 					// TODO: add factory providers
-					const { useClass, ...awilixOptions } = isCostructorProvider(provider)
-						? { useClass: provider }
-						: { ...(provider as any) }; // TODO: remove any
+					if (isCostructorProvider(provider)) {
+						return {
+							key,
+							provider,
+							scope: importedScope,
+							options,
+						};
+					}
 
-					return {
-						key,
-						provider: useClass,
-						scope: importedScope,
-						options: {
-							...this.options.providerOptions,
-							...importedModule.providerOptions,
-							...awilixOptions,
-						},
-					};
+					if (isClassProvider(provider)) {
+						const { useClass, ...awilixOptions } = provider;
+
+						return {
+							key,
+							provider: useClass,
+							scope: importedScope,
+							options: {
+								...options,
+								...awilixOptions,
+							},
+						};
+					}
+
+					throw new Error(
+						`Unsupported provider type for "${key}" in module "${importedModule.name}"`,
+					);
 				});
 			})
 			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
