@@ -173,9 +173,7 @@ export interface Controller<TFramework = unknown> {
 
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
-	imports: Def["imports"] extends AnyModule[]
-		? readonly [...Def["imports"]]
-		: readonly [];
+	imports: AnyModule[];
 	providers: ToProviderMap<Def["providers"], ExtractDeps<Def>>;
 	exports: ToProviderMap<Def["exports"], ExtractDeps<Def>>;
 	queryHandlers?: HandlerConstructor[];

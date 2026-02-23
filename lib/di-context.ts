@@ -9,7 +9,7 @@ import {
 } from "awilix";
 
 import {
-	type AnyModule,
+	type AnyModule as M,
 	type ControllerConstructor,
 	type HandlerConstructor,
 	isClassProvider,
@@ -35,7 +35,7 @@ interface DiContextOptions<TFramework = unknown> {
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 }
 
-export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
+export class DIContext<TFramework = unknown> {
 	// TODO: do scope caching for dynamic modules
 	public readonly moduleScopes = new Map<string, AwilixContainer>();
 	private readonly rootContainer: AwilixContainer;
