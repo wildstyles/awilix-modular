@@ -1,4 +1,4 @@
-import type { BuildResolverOptions, Resolver } from "awilix";
+import type { BuildResolverOptions } from "awilix";
 import type { Handler } from "./cqrs.types.ts";
 
 // ============================================================================
@@ -8,10 +8,6 @@ import type { Handler } from "./cqrs.types.ts";
 declare const emptyObjectSymbol: unique symbol;
 type EmptyObject = { [emptyObjectSymbol]?: never };
 type UnknownRecord = Record<PropertyKey, unknown>;
-
-export type MandatoryNameAndRegistrationPair<T> = {
-	[U in keyof T]: Resolver<T[U]>;
-};
 
 type ToProviderMap<
 	T extends ProviderMap,

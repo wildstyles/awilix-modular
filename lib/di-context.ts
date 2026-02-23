@@ -5,6 +5,7 @@ import {
 	asValue,
 	type BuildResolverOptions,
 	Lifetime,
+	type Resolver,
 } from "awilix";
 
 import {
@@ -15,7 +16,6 @@ import {
 	isCostructorProvider,
 	isFactoryProvider,
 	isPrimitive,
-	type MandatoryNameAndRegistrationPair,
 } from "./di-context.types.js";
 
 type ProdiderDepsGraph = {
@@ -116,16 +116,13 @@ export class DIContext<TFramework = unknown, M extends AnyModule = AnyModule> {
 					};
 				});
 			})
-			.reduce<MandatoryNameAndRegistrationPair<Record<string, object>>>(
-				(acc, curr) => {
-					acc[curr.key] = curr.scope
-						? asFunction(() => curr.scope.build(curr.provider), curr.options)
-						: asValue(curr.provider as any); // TODO: remove any
+			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
+				acc[curr.key] = curr.scope
+					? asFunction(() => curr.scope.build(curr.provider), curr.options)
+					: asValue(curr.provider);
 
-					return acc;
-				},
-				{},
-			);
+				return acc;
+			}, {});
 
 		scope.register(resolvedExportedFromImports);
 
