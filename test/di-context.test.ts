@@ -328,13 +328,12 @@ describe("DIContext", () => {
 				},
 			});
 
-			const exportedScope = importedScopes.get("ExportedModule")!.scope;
-
+			const exportedScope = importedScopes.get("ExportedModule");
 			// checks that settings for exported provider are independant of local one
 			expect(scope.registrations.sharedService.lifetime).toBe(
 				Lifetime.TRANSIENT,
 			);
-			expect(exportedScope?.registrations.sharedService.lifetime).toBe(
+			expect(exportedScope?.scope.registrations.sharedService.lifetime).toBe(
 				Lifetime.SCOPED,
 			);
 
@@ -401,17 +400,17 @@ describe("DIContext", () => {
 				},
 			});
 
-			const loggerModule = importedScopes.get("LoggerModule")!;
-			const configModule = importedScopes.get("ConfigModule")!;
+			const loggerModule = importedScopes.get("LoggerModule");
+			const configModule = importedScopes.get("ConfigModule");
 
-			expect(loggerModule.name).toBe("LoggerModule");
-			expect(loggerModule.scope).toBeDefined();
-			expect(loggerModule.scope.hasRegistration("logger")).toBe(true);
+			expect(loggerModule?.name).toBe("LoggerModule");
+			expect(loggerModule?.scope).toBeDefined();
+			expect(loggerModule?.scope.hasRegistration("logger")).toBe(true);
 
-			expect(configModule.name).toBe("ConfigModule");
-			expect(configModule.scope).toBeDefined();
-			expect(configModule.importedScopes.has("LoggerModule")).toBe(true);
-			expect(configModule.scope.hasRegistration("config")).toBe(true);
+			expect(configModule?.name).toBe("ConfigModule");
+			expect(configModule?.scope).toBeDefined();
+			expect(configModule?.importedScopes.has("LoggerModule")).toBe(true);
+			expect(configModule?.scope.hasRegistration("config")).toBe(true);
 		});
 	});
 

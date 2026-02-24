@@ -4,10 +4,10 @@ import {
 	asFunction,
 	asValue,
 	type BuildResolverOptions,
+	type ContainerOptions,
 	createContainer,
 	Lifetime,
 	type Resolver,
-	ContainerOptions,
 } from "awilix";
 
 import {
@@ -75,18 +75,26 @@ export class DIContext<TFramework = unknown> {
 		this.rootContainer.register(this.options.rootProviders);
 	}
 
-	registerModule(
+	registerModule(module: M): ModuleScopeTree {
+		return this.registerModuleWithScope(
+			module,
+			this.rootContainer.createScope(),
+		);
+	}
+
+	private registerModuleWithScope(
 		m: M,
-		targetScope = this.rootContainer.createScope(),
+		scope: AwilixContainer,
 	): ModuleScopeTree {
 		this.ensureImportedModulesUniqueness(m);
 		this.ensureNoProviderNameConflicts(m);
 
-		const scope = targetScope || this.rootContainer.createScope();
-
 		const importedModulesWithScope = m.imports.map((importedModule) => {
 			return {
-				...this.registerModule(importedModule),
+				...this.registerModuleWithScope(
+					importedModule,
+					this.rootContainer.createScope(),
+				),
 				module: importedModule,
 			};
 		});
