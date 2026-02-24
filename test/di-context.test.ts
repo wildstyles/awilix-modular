@@ -8,7 +8,12 @@ import {
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
-import type { AnyModule, Controller } from "../lib/di-context.types.js";
+import type {
+	AnyModule,
+	Controller,
+	Module,
+	ModuleDef,
+} from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
 	let diContext: DIContext;
@@ -453,10 +458,6 @@ describe("DIContext", () => {
 			expect(scope.resolve("service2").getDeps().port).toEqual(5432);
 		});
 
-		it("should allow multiple instances of the same dynamic module with different configs", () => {});
-
-		it("should use cached scope for already built module on second import", () => {});
-
 		it("should allow importing a dynamic module's exports in other modules", () => {
 			const LoggerModule = {
 				forRoot(config: { level: string }): AnyModule {
@@ -535,25 +536,14 @@ describe("DIContext", () => {
 			expect(scope.resolve("testService").getName()).toBe("TestService");
 		});
 
-		it("should throw an error when a controller is registered in multiple modules", () => {
+		it("should throw an error when a module has duplicate controllers in its array", () => {
 			expect(() => {
 				registerModule({
-					name: "TestModule",
-					imports: [
-						{
-							...anyModule,
-							name: "FirstModule",
-							controllers: [TestController],
-						},
-						{
-							...anyModule,
-							name: "SecondModule",
-							controllers: [TestController],
-						},
-					],
+					name: "DuplicateControllerModule",
+					controllers: [TestController, TestController],
 				});
 			}).toThrow(
-				'Controller "TestController" is already registered in module "FirstModule". Attempted to register again in module "SecondModule".',
+				'Module "DuplicateControllerModule" has duplicate controllers in its controllers array.',
 			);
 		});
 
@@ -593,6 +583,140 @@ describe("DIContext", () => {
 				AnotherController,
 				expect.any(Object),
 			);
+		});
+
+		it("should throw an error when dynamic modules try to register the same controller", () => {
+			const DynamicModule = {
+				forRoot(config: { value: string }): AnyModule {
+					return {
+						...anyModule,
+						name: "DynamicModule",
+						controllers: [TestController],
+						providers: {
+							config: config.value,
+						},
+					};
+				},
+			};
+
+			expect(() => {
+				registerModule({
+					name: "AppModule",
+					imports: [
+						{
+							...anyModule,
+							imports: [DynamicModule.forRoot({ value: "config1" })],
+						},
+						DynamicModule.forRoot({ value: "config2" }),
+					],
+				});
+			}).toThrow(
+				'Controller "TestController" is already registered in module "DynamicModule". ' +
+					"Controllers must be unique across modules. " +
+					"Exclude controllers from one of the module instances.",
+			);
+		});
+
+		it("should allow dynamic modules to register when controllers are excluded from one instance", () => {
+			const DynamicModule: Module<
+				ModuleDef<{
+					// providers: { config: string };
+					forRootConfig: { value: string };
+				}>
+			> = {
+				forRoot(config, options): AnyModule {
+					return {
+						...anyModule,
+						name: "DynamicModule",
+						controllers: options?.registerControllers ? [TestController] : [],
+						providers: {
+							config: config.value,
+						},
+					};
+				},
+			};
+
+			const { importedScopes } = registerModule({
+				name: "AppModule",
+				imports: [
+					{
+						...anyModule,
+						name: "StaticModule",
+						imports: [
+							DynamicModule.forRoot(
+								{ value: "config2" },
+								{ registerControllers: true },
+							),
+						],
+					},
+					DynamicModule.forRoot({ value: "config1" }),
+				],
+			});
+
+			expect(
+				importedScopes
+					.get("StaticModule")
+					?.importedScopes.get("DynamicModule")
+					?.scope.resolve("config"),
+			).toBe("config2");
+			expect(importedScopes.get("DynamicModule")?.scope.resolve("config")).toBe(
+				"config1",
+			);
+			expect(onControllerMock).toHaveBeenCalledTimes(1);
+			expect(onControllerMock).toHaveBeenCalledWith(
+				TestController,
+				expect.any(Object),
+			);
+		});
+
+		it("should throw an error when different static modules try to register the same controller", () => {
+			expect(() => {
+				registerModule({
+					name: "AppModule",
+					imports: [
+						{
+							...anyModule,
+							name: "StaticModule1",
+							controllers: [TestController],
+						},
+						{
+							...anyModule,
+							name: "StaticModule2",
+							controllers: [TestController],
+						},
+					],
+				});
+			}).toThrow(
+				'Controller "TestController" is already registered in module "StaticModule1". ' +
+					"Controllers must be unique across modules. " +
+					"Exclude controllers from one of the module instances.",
+			);
+		});
+
+		it("should allow the same static module instance to be imported multiple times", () => {
+			const sharedModule = {
+				...anyModule,
+				name: "SharedModule",
+				controllers: [TestController],
+			};
+
+			registerModule({
+				name: "AppModule",
+				imports: [
+					{
+						...anyModule,
+						name: "Module1",
+						imports: [sharedModule],
+					},
+					{
+						...anyModule,
+						name: "Module2",
+						imports: [sharedModule],
+					},
+				],
+			});
+
+			expect(onControllerMock).toHaveBeenCalledTimes(1);
 		});
 	});
 });

@@ -195,8 +195,15 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 };
 
+type DynamicModuleOptions = {
+	registerControllers?: boolean;
+};
+
 type DynamicModule<TDef extends DynamicModuleDef> = {
-	forRoot(config: TDef["forRootConfig"]): StaticModule<TDef>;
+	forRoot(
+		config: TDef["forRootConfig"],
+		options?: DynamicModuleOptions,
+	): StaticModule<TDef>;
 };
 
 export type Module<TDef extends BaseModuleDef & Partial<WithForRootConfig>> =

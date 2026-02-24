@@ -49,9 +49,9 @@ export type ImportedScopesMap = Map<string, ModuleScopeTree>;
 
 export class DIContext<TFramework = unknown> {
 	private readonly rootContainer: AwilixContainer;
-	private readonly registeredControllers = new Map<
+	private readonly registeredControllers = new WeakMap<
 		ControllerConstructor<TFramework>,
-		string
+		M
 	>();
 	private readonly options: DiContextOptions<TFramework> &
 		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
@@ -241,18 +241,32 @@ export class DIContext<TFramework = unknown> {
 	private processControllers(m: M, diScope: AwilixContainer) {
 		if (!this.options.onController || !m.controllers?.length) return;
 
+		if (new Set(m.controllers).size !== m.controllers.length) {
+			throw new Error(
+				`Module "${m.name}" has duplicate controllers in its controllers array.`,
+			);
+		}
+
 		for (const ControllerClass of m.controllers) {
 			const existingModule = this.registeredControllers.get(ControllerClass);
 
-			if (existingModule) {
-				throw new Error(
-					`Controller "${ControllerClass.name}" is already registered in module "${existingModule}". ` +
-						`Attempted to register again in module "${m.name}".`,
-				);
+			if (!existingModule) {
+				this.registeredControllers.set(ControllerClass, m);
+				this.options.onController(ControllerClass, diScope);
+				continue;
 			}
 
-			this.registeredControllers.set(ControllerClass, m.name);
-			this.options.onController(ControllerClass, diScope);
+			// Same module instance imported multiple times - skip silently
+			if (existingModule === m) {
+				continue;
+			}
+
+			// Different module trying to register the same controller - throw error
+			throw new Error(
+				`Controller "${ControllerClass.name}" is already registered in module "${existingModule.name}". ` +
+					`Controllers must be unique across modules. ` +
+					`Exclude controllers from one of the module instances.`,
+			);
 		}
 	}
 
