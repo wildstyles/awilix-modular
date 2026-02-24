@@ -7,7 +7,7 @@ import {
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-import { DIContext } from "../lib/di-context.js";
+import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
 import type { AnyModule, Controller } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
@@ -55,15 +55,13 @@ describe("DIContext", () => {
 		});
 	});
 
-	function registerAndGetScope(
+	function registerModule(
 		module: Partial<AnyModule>,
-	): AwilixContainer<{ [k: string]: TestableBase }> {
-		const { scope, name } = diContext.registerModule({
+	): ModuleScopeTree<AwilixContainer<{ [k: string]: TestableBase }>> {
+		return diContext.registerModule({
 			...anyModule,
 			...module,
 		});
-
-		return scope;
 	}
 
 	describe("Ensure that module interactions/declarations are correct", () => {
@@ -74,7 +72,7 @@ describe("DIContext", () => {
 			};
 
 			expect(() => {
-				registerAndGetScope({
+				registerModule({
 					name: "MainModule",
 					imports: [importedModule, importedModule],
 				});
@@ -83,7 +81,7 @@ describe("DIContext", () => {
 
 		it("should throw an error when a module has provider name conflicts with imported modules", () => {
 			expect(() => {
-				registerAndGetScope({
+				registerModule({
 					name: "MainModule",
 					imports: [
 						{
@@ -107,7 +105,7 @@ describe("DIContext", () => {
 
 		it("should throw an error when factory provider depends on non-existent provider", () => {
 			expect(() => {
-				registerAndGetScope({
+				registerModule({
 					name: "InvalidFactoryModule",
 					providers: {
 						factoryService: {
@@ -125,7 +123,7 @@ describe("DIContext", () => {
 
 	describe("Factory Provider Registration", () => {
 		it("should register a factory provider without dependencies", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					factoryService: {
 						provide: TestableBase,
@@ -140,7 +138,7 @@ describe("DIContext", () => {
 		});
 
 		it("should register a factory provider with dependencies", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					baseService: TestableBase,
 					factoryService: {
@@ -160,7 +158,7 @@ describe("DIContext", () => {
 		});
 
 		it("should register factory providers correctly despite on order of registration", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					factoryServiceA: {
 						provide: TestableBase,
@@ -207,7 +205,7 @@ describe("DIContext", () => {
 
 	describe("Simple Provider Registration", () => {
 		it("should register a module with providers within one scope", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					testService: class TestService extends TestableBase {},
 				},
@@ -217,7 +215,7 @@ describe("DIContext", () => {
 		});
 
 		it("should register a ClassConstructor directly with default context settings", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					directClassService: class DirectClassService extends TestableBase {},
 				},
@@ -236,7 +234,7 @@ describe("DIContext", () => {
 			class ServiceWithClassProvider extends TestableBase {}
 			const injectorFn = vi.fn(() => ({ injected: true }));
 
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providerOptions: {
 					lifetime: Lifetime.TRANSIENT,
 				},
@@ -264,7 +262,7 @@ describe("DIContext", () => {
 
 	describe("Primitive Provider Registration", () => {
 		it("should register string/number primitives as values", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					apiUrl: "https://api.example.com",
 					port: 3000,
@@ -280,7 +278,7 @@ describe("DIContext", () => {
 		});
 
 		it("should register primitives alongside class providers", () => {
-			const scope = registerAndGetScope({
+			const { scope } = registerModule({
 				providers: {
 					apiUrl: "https://api.example.com",
 					port: 8080,
@@ -323,14 +321,14 @@ describe("DIContext", () => {
 				},
 			};
 
-			const scope = registerAndGetScope({
+			const { scope, importedScopes } = registerModule({
 				imports: [exportedModule],
 				providers: {
 					localService: class LocalService extends TestableBase {},
 				},
 			});
 
-			const exportedScope = diContext.moduleScopes.get("ExportedModule");
+			const exportedScope = importedScopes.get("ExportedModule")!.scope;
 
 			// checks that settings for exported provider are independant of local one
 			expect(scope.registrations.sharedService.lifetime).toBe(
@@ -369,6 +367,52 @@ describe("DIContext", () => {
 				"internalService1",
 			);
 		});
+
+		it("should return importScopes map with all imported modules", () => {
+			const LoggerModule: AnyModule = {
+				...anyModule,
+				name: "LoggerModule",
+				providers: {
+					logger: class Logger extends TestableBase {},
+				},
+				exports: {
+					logger: class Logger extends TestableBase {},
+				},
+			};
+
+			const ConfigModule: AnyModule = {
+				...anyModule,
+				name: "ConfigModule",
+				imports: [LoggerModule],
+				providers: {
+					config: class Config extends TestableBase {},
+				},
+				exports: {
+					config: class Config extends TestableBase {},
+				},
+			};
+
+			const { importedScopes } = diContext.registerModule({
+				...anyModule,
+				name: "AppModule",
+				imports: [LoggerModule, ConfigModule],
+				providers: {
+					appService: class AppService extends TestableBase {},
+				},
+			});
+
+			const loggerModule = importedScopes.get("LoggerModule")!;
+			const configModule = importedScopes.get("ConfigModule")!;
+
+			expect(loggerModule.name).toBe("LoggerModule");
+			expect(loggerModule.scope).toBeDefined();
+			expect(loggerModule.scope.hasRegistration("logger")).toBe(true);
+
+			expect(configModule.name).toBe("ConfigModule");
+			expect(configModule.scope).toBeDefined();
+			expect(configModule.importedScopes.has("LoggerModule")).toBe(true);
+			expect(configModule.scope.hasRegistration("config")).toBe(true);
+		});
 	});
 
 	describe("Dynamic Module Registration", () => {
@@ -395,7 +439,7 @@ describe("DIContext", () => {
 				},
 			};
 
-			const scope = registerAndGetScope(
+			const { scope } = registerModule(
 				DatabaseModule.forRoot({
 					host: "localhost",
 					port: 5432,
@@ -448,7 +492,7 @@ describe("DIContext", () => {
 				},
 			};
 
-			const appScope = registerAndGetScope(AppModule.forRoot());
+			const { scope: appScope } = registerModule(AppModule.forRoot());
 
 			expect(appScope.resolve("appService").getDepKeys()).toContain(
 				"loggerService",
@@ -462,7 +506,7 @@ describe("DIContext", () => {
 		class AnotherController extends ControllerBase {}
 
 		it("should call onController callback for each controller in a module", () => {
-			registerAndGetScope({
+			registerModule({
 				controllers: [TestController, AnotherController],
 			});
 
@@ -478,7 +522,7 @@ describe("DIContext", () => {
 		});
 
 		it("should pass the correct scope to onController callback", () => {
-			registerAndGetScope({
+			registerModule({
 				providers: {
 					testService: class TestService extends TestableBase {},
 				},
@@ -494,7 +538,7 @@ describe("DIContext", () => {
 
 		it("should throw an error when a controller is registered in multiple modules", () => {
 			expect(() => {
-				registerAndGetScope({
+				registerModule({
 					name: "TestModule",
 					imports: [
 						{
@@ -515,7 +559,7 @@ describe("DIContext", () => {
 		});
 
 		it("should not call onController callback when no controllers are defined", () => {
-			registerAndGetScope({
+			registerModule({
 				providers: {
 					testService: class TestService extends TestableBase {},
 				},
@@ -525,7 +569,7 @@ describe("DIContext", () => {
 		});
 
 		it("should call onController for controllers in modules with imports", () => {
-			registerAndGetScope({
+			registerModule({
 				imports: [
 					{
 						...anyModule,

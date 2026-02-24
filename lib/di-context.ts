@@ -39,9 +39,15 @@ interface DiContextOptions<TFramework = unknown> {
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 }
 
+export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
+	name: string;
+	scope: S;
+	importedScopes: ImportedScopesMap;
+}
+
+export type ImportedScopesMap = Map<string, ModuleScopeTree>;
+
 export class DIContext<TFramework = unknown> {
-	// TODO: do scope caching for dynamic modules
-	public readonly moduleScopes = new Map<string, AwilixContainer>();
 	private readonly rootContainer: AwilixContainer;
 	private readonly registeredControllers = new Map<
 		ControllerConstructor<TFramework>,
@@ -69,28 +75,24 @@ export class DIContext<TFramework = unknown> {
 		this.rootContainer.register(this.options.rootProviders);
 	}
 
-	registerModule(module: M) {
-		const scope = this.rootContainer.createScope();
-		this.registerProvidersWithImports(module, scope);
-
-		return { scope, name: module.name };
-	}
-
-	private registerProvidersWithImports(m: M, targetScope?: AwilixContainer) {
-		const existingScope = this.moduleScopes.get(m.name);
-
-		if (existingScope) {
-			return existingScope;
-		}
-
+	registerModule(
+		m: M,
+		targetScope = this.rootContainer.createScope(),
+	): ModuleScopeTree {
 		this.ensureImportedModulesUniqueness(m);
 		this.ensureNoProviderNameConflicts(m);
 
 		const scope = targetScope || this.rootContainer.createScope();
-		const resolvedExportedFromImports = m.imports
-			.flatMap((importedModule) => {
-				const importedScope = this.registerProvidersWithImports(importedModule);
 
+		const importedModulesWithScope = m.imports.map((importedModule) => {
+			return {
+				...this.registerModule(importedModule),
+				module: importedModule,
+			};
+		});
+
+		const resolvedExportedFromImports = importedModulesWithScope
+			.flatMap(({ module: importedModule, scope: importedScope }) => {
 				return Object.entries(importedModule.exports).map(([key, provider]) => {
 					const options = {
 						...this.options.providerOptions,
@@ -206,12 +208,18 @@ export class DIContext<TFramework = unknown> {
 			},
 		);
 
-		this.moduleScopes.set(m.name, scope);
-
 		this.processQueryHandlers(m, scope);
 		this.processControllers(m, scope);
 
-		return scope;
+		const importedScopes = importedModulesWithScope.reduce<
+			ModuleScopeTree["importedScopes"]
+		>((acc, { module, ...rest }) => {
+			acc.set(rest.name, rest);
+
+			return acc;
+		}, new Map());
+
+		return { scope, importedScopes, name: m.name };
 	}
 
 	private processQueryHandlers(m: M, scope: AwilixContainer) {
