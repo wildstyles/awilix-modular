@@ -4,8 +4,10 @@ import {
 	asFunction,
 	asValue,
 	type BuildResolverOptions,
+	createContainer,
 	Lifetime,
 	type Resolver,
+	ContainerOptions,
 } from "awilix";
 
 import {
@@ -32,6 +34,8 @@ interface DiContextOptions<TFramework = unknown> {
 		ControllerClass: ControllerConstructor<TFramework>,
 		scope: AwilixContainer,
 	) => void;
+	containerOptions?: ContainerOptions;
+	rootProviders?: Record<string, Resolver<any>>;
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 }
 
@@ -44,17 +48,14 @@ export class DIContext<TFramework = unknown> {
 		string
 	>();
 	private readonly options: DiContextOptions<TFramework> &
-		Required<Pick<DiContextOptions, "providerOptions">> = {
+		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
+		rootProviders: {},
 		providerOptions: {
 			lifetime: Lifetime.SCOPED,
 		},
 	};
 
-	constructor(
-		rootContainer: AwilixContainer,
-		options: DiContextOptions<TFramework> = {},
-	) {
-		this.rootContainer = rootContainer;
+	constructor(options: DiContextOptions<TFramework> = {}) {
 		this.options = {
 			...this.options,
 			...options,
@@ -63,16 +64,16 @@ export class DIContext<TFramework = unknown> {
 				...options.providerOptions,
 			},
 		};
+
+		this.rootContainer = createContainer(options.containerOptions);
+		this.rootContainer.register(this.options.rootProviders);
 	}
 
-	registerModules(modules: M[]) {
-		return modules.map((module) => {
-			const scope = this.rootContainer.createScope();
+	registerModule(module: M) {
+		const scope = this.rootContainer.createScope();
+		this.registerProvidersWithImports(module, scope);
 
-			this.registerProvidersWithImports(module, scope);
-
-			return { scope, name: module.name };
-		});
+		return { scope, name: module.name };
 	}
 
 	private registerProvidersWithImports(m: M, targetScope?: AwilixContainer) {

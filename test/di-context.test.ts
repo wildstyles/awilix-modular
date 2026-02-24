@@ -2,7 +2,6 @@ import {
 	type AwilixContainer,
 	asValue,
 	type BuildResolverOptions,
-	createContainer,
 	Lifetime,
 } from "awilix";
 
@@ -42,33 +41,27 @@ describe("DIContext", () => {
 		providers: {},
 	});
 
-	const rootContainerResolvers = {
+	const rootProviders = {
 		logger: asValue({ info: vi.fn(), error: vi.fn() }),
 		config: asValue({ env: "test" }),
 	};
-	const rootResolversCount = Object.keys(rootContainerResolvers).length;
+	const rootResolversCount = Object.keys(rootProviders).length;
 
 	beforeEach(() => {
 		onControllerMock = vi.fn();
-		diContext = new DIContext(
-			createContainer().register(rootContainerResolvers),
-			{ onController: onControllerMock },
-		);
+		diContext = new DIContext({
+			onController: onControllerMock,
+			rootProviders,
+		});
 	});
 
-	/**
-	 * Helper function to register a module and return its scope directly
-	 */
 	function registerAndGetScope(
 		module: Partial<AnyModule>,
 	): AwilixContainer<{ [k: string]: TestableBase }> {
-		const fullModule: AnyModule = { ...anyModule, ...module };
-		diContext.registerModules([fullModule]);
-		const scope = diContext.moduleScopes.get(fullModule.name);
-
-		if (!scope) {
-			throw new Error(`Module "${fullModule.name}" was not registered`);
-		}
+		const { scope, name } = diContext.registerModule({
+			...anyModule,
+			...module,
+		});
 
 		return scope;
 	}
