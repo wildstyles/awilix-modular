@@ -7,6 +7,14 @@ import {
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
+import {
+	ControllerAlreadyRegisteredError,
+	DependencyNotFoundError,
+	DuplicateControllersInModuleError,
+	DuplicateModuleImportError,
+	ProviderNameConflictError,
+} from "../lib/di-context.errors.js";
+
 import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
 import type {
 	AnyModule,
@@ -81,7 +89,7 @@ describe("DIContext", () => {
 					name: "MainModule",
 					imports: [importedModule, importedModule],
 				});
-			}).toThrow('Module "MainModule" has duplicate import of "SharedModule"');
+			}).toThrow(DuplicateModuleImportError);
 		});
 
 		it("should throw an error when a module has provider name conflicts with imported modules", () => {
@@ -103,9 +111,7 @@ describe("DIContext", () => {
 						sharedService: class ConflictingService extends TestableBase {},
 					},
 				});
-			}).toThrow(
-				'Module "MainModule" has provider name conflicts with imported modules: sharedService',
-			);
+			}).toThrow(ProviderNameConflictError);
 		});
 
 		it("should throw an error when factory provider depends on non-existent provider", () => {
@@ -120,9 +126,7 @@ describe("DIContext", () => {
 						},
 					},
 				});
-			}).toThrow(
-				'"nonExistentService" does not exist in scope of InvalidFactoryModule',
-			);
+			}).toThrow(DependencyNotFoundError);
 		});
 	});
 
@@ -542,9 +546,7 @@ describe("DIContext", () => {
 					name: "DuplicateControllerModule",
 					controllers: [TestController, TestController],
 				});
-			}).toThrow(
-				'Module "DuplicateControllerModule" has duplicate controllers in its controllers array.',
-			);
+			}).toThrow(DuplicateControllersInModuleError);
 		});
 
 		it("should not call onController callback when no controllers are defined", () => {
@@ -610,21 +612,17 @@ describe("DIContext", () => {
 						DynamicModule.forRoot({ value: "config2" }),
 					],
 				});
-			}).toThrow(
-				'Controller "TestController" is already registered in module "DynamicModule". ' +
-					"Controllers must be unique across modules. " +
-					"Exclude controllers from one of the module instances.",
-			);
+			}).toThrow(ControllerAlreadyRegisteredError);
 		});
 
 		it("should allow dynamic modules to register when controllers are excluded from one instance", () => {
 			const DynamicModule: Module<
 				ModuleDef<{
-					// providers: { config: string };
+					providers: { config: string };
 					forRootConfig: { value: string };
 				}>
 			> = {
-				forRoot(config, options): AnyModule {
+				forRoot(config, options) {
 					return {
 						...anyModule,
 						name: "DynamicModule",
@@ -686,11 +684,7 @@ describe("DIContext", () => {
 						},
 					],
 				});
-			}).toThrow(
-				'Controller "TestController" is already registered in module "StaticModule1". ' +
-					"Controllers must be unique across modules. " +
-					"Exclude controllers from one of the module instances.",
-			);
+			}).toThrow(ControllerAlreadyRegisteredError);
 		});
 
 		it("should allow the same static module instance to be imported multiple times", () => {

@@ -9,7 +9,16 @@ import {
 	Lifetime,
 	type Resolver,
 } from "awilix";
-
+import {
+	CircularDependencyError,
+	ControllerAlreadyRegisteredError,
+	DependencyNotFoundError,
+	DuplicateControllersInModuleError,
+	DuplicateModuleImportError,
+	ProviderNameConflictError,
+	ProviderNotFoundError,
+	UnsupportedProviderTypeError,
+} from "./di-context.errors.js";
 import {
 	type ControllerConstructor,
 	type HandlerConstructor,
@@ -140,9 +149,7 @@ export class DIContext<TFramework = unknown> {
 						};
 					}
 
-					throw new Error(
-						`Unsupported provider type for "${key}" in module "${importedModule.name}"`,
-					);
+					throw new UnsupportedProviderTypeError(key, importedModule.name);
 				});
 			})
 			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
@@ -166,7 +173,7 @@ export class DIContext<TFramework = unknown> {
 
 					const factoryDeps = (provider.inject || []).map((key) => {
 						if (!scope.registrations[key]) {
-							throw new Error(`Provider ${key} is not exist in ${m.name}`);
+							throw new ProviderNotFoundError(key, m.name);
 						}
 
 						return scope.registrations[key].resolve(scope);
@@ -242,9 +249,7 @@ export class DIContext<TFramework = unknown> {
 		if (!this.options.onController || !m.controllers?.length) return;
 
 		if (new Set(m.controllers).size !== m.controllers.length) {
-			throw new Error(
-				`Module "${m.name}" has duplicate controllers in its controllers array.`,
-			);
+			throw new DuplicateControllersInModuleError(m.name);
 		}
 
 		for (const ControllerClass of m.controllers) {
@@ -262,10 +267,9 @@ export class DIContext<TFramework = unknown> {
 			}
 
 			// Different module trying to register the same controller - throw error
-			throw new Error(
-				`Controller "${ControllerClass.name}" is already registered in module "${existingModule.name}". ` +
-					`Controllers must be unique across modules. ` +
-					`Exclude controllers from one of the module instances.`,
+			throw new ControllerAlreadyRegisteredError(
+				ControllerClass.name,
+				existingModule.name,
 			);
 		}
 	}
@@ -314,9 +318,7 @@ export class DIContext<TFramework = unknown> {
 					const depList = acc.graph.get(dep);
 
 					if (!depList) {
-						throw new Error(
-							`"${dep}" does not exist in scope of ${m.name} module`,
-						);
+						throw new DependencyNotFoundError(dep, m.name);
 					}
 
 					depList.push(key);
@@ -365,9 +367,7 @@ export class DIContext<TFramework = unknown> {
 		if (sortedKeys.length !== providerKeys.length) {
 			const remaining = providerKeys.filter((key) => !sortedKeys.includes(key));
 
-			throw new Error(
-				`Circular dependency detected in module "${m.name}" for providers: ${remaining.join(", ")}`,
-			);
+			throw new CircularDependencyError(m.name, remaining);
 		}
 	}
 
@@ -376,9 +376,7 @@ export class DIContext<TFramework = unknown> {
 
 		for (const imported of m.imports) {
 			if (importedNames.has(imported.name)) {
-				throw new Error(
-					`Module "${m.name}" has duplicate import of "${imported.name}"`,
-				);
+				throw new DuplicateModuleImportError(m.name, imported.name);
 			}
 
 			importedNames.add(imported.name);
@@ -396,9 +394,7 @@ export class DIContext<TFramework = unknown> {
 		);
 
 		if (conflicts.length > 0) {
-			throw new Error(
-				`Module "${m.name}" has provider name conflicts with imported modules: ${conflicts.join(", ")}`,
-			);
+			throw new ProviderNameConflictError(m.name, conflicts);
 		}
 	}
 }

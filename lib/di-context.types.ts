@@ -31,11 +31,11 @@ type ToProviderMap<
 > = [keyof T] extends [never]
 	? EmptyObject
 	: {
-			[K in keyof T]: Provider<T[K], DepsMap>;
+			[K in keyof T]: T[K] extends object ? Provider<T[K], DepsMap> : T[K]; // Primitives pass through directly
 		};
 
 // TODO: make any class constructor instead of object
-type ProviderMap = Record<string, object>;
+type ProviderMap = Record<string, object | string | boolean | number>;
 
 export type AnyModule = StaticModule<ModuleDef<any>>;
 
