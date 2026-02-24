@@ -1,4 +1,5 @@
 import {
+	type AwilixContainer,
 	asValue,
 	type BuildResolverOptions,
 	createContainer,
@@ -55,6 +56,23 @@ describe("DIContext", () => {
 		);
 	});
 
+	/**
+	 * Helper function to register a module and return its scope directly
+	 */
+	function registerAndGetScope(
+		module: Partial<AnyModule>,
+	): AwilixContainer<{ [k: string]: TestableBase }> {
+		const fullModule: AnyModule = { ...anyModule, ...module };
+		diContext.registerModules([fullModule]);
+		const scope = diContext.moduleScopes.get(fullModule.name);
+
+		if (!scope) {
+			throw new Error(`Module "${fullModule.name}" was not registered`);
+		}
+
+		return scope;
+	}
+
 	describe("Ensure that module interactions/declarations are correct", () => {
 		it("should throw an error when a module has duplicate imports", () => {
 			const importedModule: AnyModule = {
@@ -62,60 +80,50 @@ describe("DIContext", () => {
 				name: "SharedModule",
 			};
 
-			const moduleWithDuplicateImports: AnyModule = {
-				...anyModule,
-				name: "MainModule",
-				imports: [importedModule, importedModule],
-			};
-
 			expect(() => {
-				diContext.registerModules([moduleWithDuplicateImports]);
+				registerAndGetScope({
+					name: "MainModule",
+					imports: [importedModule, importedModule],
+				});
 			}).toThrow('Module "MainModule" has duplicate import of "SharedModule"');
 		});
 
 		it("should throw an error when a module has provider name conflicts with imported modules", () => {
-			const importedModule: AnyModule = {
-				...anyModule,
-				name: "SharedModule",
-				providers: {
-					sharedService: class SharedService extends TestableBase {},
-				},
-				exports: {
-					sharedService: class SharedService extends TestableBase {},
-				},
-			};
-
-			const moduleWithConflict: AnyModule = {
-				...anyModule,
-				name: "MainModule",
-				imports: [importedModule],
-				providers: {
-					sharedService: class ConflictingService extends TestableBase {},
-				},
-			};
-
 			expect(() => {
-				diContext.registerModules([moduleWithConflict]);
+				registerAndGetScope({
+					name: "MainModule",
+					imports: [
+						{
+							...anyModule,
+							providers: {
+								sharedService: class SharedService extends TestableBase {},
+							},
+							exports: {
+								sharedService: class SharedService extends TestableBase {},
+							},
+						},
+					],
+					providers: {
+						sharedService: class ConflictingService extends TestableBase {},
+					},
+				});
 			}).toThrow(
 				'Module "MainModule" has provider name conflicts with imported modules: sharedService',
 			);
 		});
 
 		it("should throw an error when factory provider depends on non-existent provider", () => {
-			const testModule: AnyModule = {
-				...anyModule,
-				name: "InvalidFactoryModule",
-				providers: {
-					factoryService: {
-						provide: TestableBase,
-						inject: ["nonExistentService"],
-						useFactory: () => new TestableBase(),
-					},
-				},
-			};
-
 			expect(() => {
-				diContext.registerModules([testModule]);
+				registerAndGetScope({
+					name: "InvalidFactoryModule",
+					providers: {
+						factoryService: {
+							provide: TestableBase,
+							inject: ["nonExistentService"],
+							useFactory: () => new TestableBase(),
+						},
+					},
+				});
 			}).toThrow(
 				'"nonExistentService" does not exist in scope of InvalidFactoryModule',
 			);
@@ -124,9 +132,7 @@ describe("DIContext", () => {
 
 	describe("Factory Provider Registration", () => {
 		it("should register a factory provider without dependencies", () => {
-			const testModule: AnyModule = {
-				...anyModule,
-				name: "FactoryModule",
+			const scope = registerAndGetScope({
 				providers: {
 					factoryService: {
 						provide: TestableBase,
@@ -134,20 +140,14 @@ describe("DIContext", () => {
 						useFactory: () => new TestableBase(),
 					},
 				},
-			};
+			});
 
-			diContext.registerModules([testModule]);
-
-			const scope = diContext.moduleScopes.get("FactoryModule");
-
-			expect(scope?.hasRegistration("factoryService")).toBeTruthy();
-			expect(scope?.resolve("factoryService").getDepKeys().length).toBe(0);
+			expect(scope.hasRegistration("factoryService")).toBeTruthy();
+			expect(scope.resolve("factoryService").getDepKeys().length).toBe(0);
 		});
 
 		it("should register a factory provider with dependencies", () => {
-			const testModule: AnyModule = {
-				...anyModule,
-				name: "FactoryWithDepsModule",
+			const scope = registerAndGetScope({
 				providers: {
 					baseService: TestableBase,
 					factoryService: {
@@ -157,22 +157,17 @@ describe("DIContext", () => {
 							new TestableBase({ baseService }),
 					},
 				},
-			};
+			});
 
-			diContext.registerModules([testModule]);
-
-			const scope = diContext.moduleScopes.get("FactoryWithDepsModule");
-			const factoryService = scope?.resolve("factoryService");
-
-			expect(scope?.hasRegistration("factoryService")).toBeTruthy();
-			expect(factoryService.getDepKeys().length).toBe(1);
-			expect(factoryService.getDepKeys()[0]).toBe("baseService");
+			expect(scope.hasRegistration("factoryService")).toBeTruthy();
+			expect(scope.resolve("factoryService").getDepKeys().length).toBe(1);
+			expect(scope.resolve("factoryService").getDepKeys()[0]).toBe(
+				"baseService",
+			);
 		});
 
 		it("should register factory providers correctly despite on order of registration", () => {
-			const testModule: AnyModule = {
-				...anyModule,
-				name: "OrderIndependentModule",
+			const scope = registerAndGetScope({
 				providers: {
 					factoryServiceA: {
 						provide: TestableBase,
@@ -190,65 +185,56 @@ describe("DIContext", () => {
 					},
 					serviceA: class ServiceA extends TestableBase {},
 				},
-			};
+			});
 
-			diContext.registerModules([testModule]);
+			expect(scope.resolve("serviceA").getDepKeys().length).toBe(
+				3 + rootResolversCount,
+			);
+			expect(scope.resolve("serviceA").getDepKeys()).toContain(
+				"factoryServiceA",
+			);
+			expect(scope.resolve("serviceA").getDepKeys()).toContain(
+				"factoryServiceB",
+			);
 
-			const scope = diContext.moduleScopes.get("OrderIndependentModule");
-			const factoryServiceA = scope?.resolve("factoryServiceA");
-			const factoryServiceB = scope?.resolve("factoryServiceB");
-			const serviceA = scope?.resolve("serviceA");
+			expect(scope.resolve("factoryServiceA").getDepKeys().length).toBe(2);
+			expect(scope.resolve("factoryServiceA").getDepKeys()).toContain(
+				"factoryServiceB",
+			);
+			expect(scope.resolve("factoryServiceA").getDepKeys()).toContain(
+				"serviceA",
+			);
 
-			expect(serviceA.getDepKeys().length).toBe(3 + rootResolversCount);
-			expect(serviceA.getDepKeys()).toContain("factoryServiceA");
-			expect(serviceA.getDepKeys()).toContain("factoryServiceB");
-
-			expect(factoryServiceA.getDepKeys().length).toBe(2);
-			expect(factoryServiceA.getDepKeys()).toContain("factoryServiceB");
-			expect(factoryServiceA.getDepKeys()).toContain("serviceA");
-
-			expect(factoryServiceB.getDepKeys().length).toBe(1);
-			expect(factoryServiceB.getDepKeys()).toContain("serviceA");
+			expect(scope.resolve("factoryServiceB").getDepKeys().length).toBe(1);
+			expect(scope.resolve("factoryServiceB").getDepKeys()).toContain(
+				"serviceA",
+			);
 		});
 	});
 
 	describe("Simple Provider Registration", () => {
 		it("should register a module with providers within one scope", () => {
-			diContext.registerModules([
-				{
-					...anyModule,
-					name: "TestModule",
-					providers: {
-						testService: class TestService extends TestableBase {},
-					},
+			const scope = registerAndGetScope({
+				providers: {
+					testService: class TestService extends TestableBase {},
 				},
-			]);
+			});
 
-			const scope = diContext.moduleScopes.get("TestModule");
-
-			expect(scope?.resolve("testService").getName()).toBe("TestService");
+			expect(scope.resolve("testService").getName()).toBe("TestService");
 		});
 
 		it("should register a ClassConstructor directly with default context settings", () => {
-			class DirectClassService extends TestableBase {}
-
-			diContext.registerModules([
-				{
-					...anyModule,
-					name: "ClassConstructorModule",
-					providers: {
-						directClassService: DirectClassService,
-					},
+			const scope = registerAndGetScope({
+				providers: {
+					directClassService: class DirectClassService extends TestableBase {},
 				},
-			]);
+			});
 
-			const scope = diContext.moduleScopes.get("ClassConstructorModule");
-
-			expect(scope?.hasRegistration("directClassService")).toBeTruthy();
-			expect(scope?.resolve("directClassService").getName()).toBe(
+			expect(scope.hasRegistration("directClassService")).toBeTruthy();
+			expect(scope.resolve("directClassService").getName()).toBe(
 				"DirectClassService",
 			);
-			expect(scope?.registrations.directClassService.lifetime).toBe(
+			expect(scope.registrations.directClassService.lifetime).toBe(
 				Lifetime.SCOPED,
 			);
 		});
@@ -257,33 +243,27 @@ describe("DIContext", () => {
 			class ServiceWithClassProvider extends TestableBase {}
 			const injectorFn = vi.fn(() => ({ injected: true }));
 
-			diContext.registerModules([
-				{
-					...anyModule,
-					name: "ClassProviderModule",
-					providerOptions: {
-						lifetime: Lifetime.TRANSIENT,
-					},
-					providers: {
-						classProviderService: {
-							injector: injectorFn,
-							useClass: ServiceWithClassProvider,
-						},
+			const scope = registerAndGetScope({
+				providerOptions: {
+					lifetime: Lifetime.TRANSIENT,
+				},
+				providers: {
+					classProviderService: {
+						injector: injectorFn,
+						useClass: ServiceWithClassProvider,
 					},
 				},
-			]);
+			});
 
-			const scope = diContext.moduleScopes.get("ClassProviderModule");
-
-			expect(scope?.hasRegistration("classProviderService")).toBeTruthy();
-			expect(scope?.resolve("classProviderService").getName()).toBe(
+			expect(scope.hasRegistration("classProviderService")).toBeTruthy();
+			expect(scope.resolve("classProviderService").getName()).toBe(
 				"ServiceWithClassProvider",
 			);
-			expect(scope?.registrations.classProviderService.lifetime).toBe(
+			expect(scope.registrations.classProviderService.lifetime).toBe(
 				Lifetime.TRANSIENT,
 			);
 			expect(
-				(scope?.registrations.classProviderService as BuildResolverOptions<any>)
+				(scope.registrations.classProviderService as BuildResolverOptions<any>)
 					.injector,
 			).toBe(injectorFn);
 		});
@@ -291,48 +271,34 @@ describe("DIContext", () => {
 
 	describe("Primitive Provider Registration", () => {
 		it("should register string/number primitives as values", () => {
-			diContext.registerModules([
-				{
-					...anyModule,
-					name: "StringModule",
-					providers: {
-						apiUrl: "https://api.example.com",
-						port: 3000,
-						isProduction: true,
-						debugMode: false,
-					},
+			const scope = registerAndGetScope({
+				providers: {
+					apiUrl: "https://api.example.com",
+					port: 3000,
+					isProduction: true,
+					debugMode: false,
 				},
-			]);
+			});
 
-			const scope = diContext.moduleScopes.get("StringModule");
-
-			expect(scope?.resolve("port")).toBe(3000);
-			expect(scope?.resolve("apiUrl")).toBe("https://api.example.com");
-			expect(scope?.resolve("isProduction")).toBe(true);
-			expect(scope?.resolve("debugMode")).toBe(false);
+			expect(scope.resolve("port")).toBe(3000);
+			expect(scope.resolve("apiUrl")).toBe("https://api.example.com");
+			expect(scope.resolve("isProduction")).toBe(true);
+			expect(scope.resolve("debugMode")).toBe(false);
 		});
 
 		it("should register primitives alongside class providers", () => {
-			class ConfigService extends TestableBase {}
-
-			diContext.registerModules([
-				{
-					...anyModule,
-					name: "MixedModule",
-					providers: {
-						apiUrl: "https://api.example.com",
-						port: 8080,
-						configService: ConfigService,
-					},
+			const scope = registerAndGetScope({
+				providers: {
+					apiUrl: "https://api.example.com",
+					port: 8080,
+					configService: class ConfigService extends TestableBase {},
 				},
-			]);
+			});
 
-			const scope = diContext.moduleScopes.get("MixedModule");
-
-			const configService = scope?.resolve("configService");
-
-			expect(configService.getDeps().port).toBe(8080);
-			expect(configService.getDeps().apiUrl).toBe("https://api.example.com");
+			expect(scope.resolve("configService").getDeps().port).toBe(8080);
+			expect(scope.resolve("configService").getDeps().apiUrl).toBe(
+				"https://api.example.com",
+			);
 		});
 	});
 
@@ -364,47 +330,51 @@ describe("DIContext", () => {
 				},
 			};
 
-			diContext.registerModules([
-				{
-					...anyModule,
-					name: "ImportingModule",
-					imports: [exportedModule],
-					providers: {
-						localService: class LocalService extends TestableBase {},
-					},
+			const scope = registerAndGetScope({
+				imports: [exportedModule],
+				providers: {
+					localService: class LocalService extends TestableBase {},
 				},
-			]);
+			});
 
-			const scope = diContext.moduleScopes.get("ImportingModule");
 			const exportedScope = diContext.moduleScopes.get("ExportedModule");
 
-			const localService = scope?.resolve("localService");
-			const sharedServiceExported = scope?.resolve("sharedService");
-
 			// checks that settings for exported provider are independant of local one
-			expect(scope?.registrations.sharedService.lifetime).toBe(
+			expect(scope.registrations.sharedService.lifetime).toBe(
 				Lifetime.TRANSIENT,
 			);
 			expect(exportedScope?.registrations.sharedService.lifetime).toBe(
 				Lifetime.SCOPED,
 			);
 
-			expect(scope?.hasRegistration("sharedService")).toBeTruthy();
+			expect(scope.hasRegistration("sharedService")).toBeTruthy();
 			// internal provider is NOT exported and should be unavailable
-			expect(scope?.hasRegistration("internalService")).toBeFalsy();
+			expect(scope.hasRegistration("internalService")).toBeFalsy();
 			// imports of imported are also should be unavailable
-			expect(scope?.hasRegistration("internalService1")).toBeFalsy();
+			expect(scope.hasRegistration("internalService1")).toBeFalsy();
 
-			expect(sharedServiceExported.getName()).toBe("SharedService");
-			expect(sharedServiceExported.getDepKeys()).toContain("internalService");
-			expect(sharedServiceExported.getDepKeys()).toContain("internalService1");
+			expect(scope.resolve("sharedService").getName()).toBe("SharedService");
+			expect(scope.resolve("sharedService").getDepKeys()).toContain(
+				"internalService",
+			);
+			expect(scope.resolve("sharedService").getDepKeys()).toContain(
+				"internalService1",
+			);
 			// imported module scope knowns nothing about it's host
-			expect(sharedServiceExported.getDepKeys()).not.toContain("localService");
+			expect(scope.resolve("sharedService").getDepKeys()).not.toContain(
+				"localService",
+			);
 
-			expect(localService.getName()).toBe("LocalService");
-			expect(localService.getDepKeys()).toContain("sharedService");
-			expect(localService.getDepKeys()).not.toContain("internalService");
-			expect(localService.getDepKeys()).not.toContain("internalService1");
+			expect(scope.resolve("localService").getName()).toBe("LocalService");
+			expect(scope.resolve("localService").getDepKeys()).toContain(
+				"sharedService",
+			);
+			expect(scope.resolve("localService").getDepKeys()).not.toContain(
+				"internalService",
+			);
+			expect(scope.resolve("localService").getDepKeys()).not.toContain(
+				"internalService1",
+			);
 		});
 	});
 
@@ -432,20 +402,19 @@ describe("DIContext", () => {
 				},
 			};
 
-			diContext.registerModules([
+			const scope = registerAndGetScope(
 				DatabaseModule.forRoot({
 					host: "localhost",
 					port: 5432,
 				}),
-			]);
+			);
 
-			const scope = diContext.moduleScopes.get("DatabaseModule");
-			const service1 = scope?.resolve("service1");
-			const service2 = scope?.resolve("service2");
-
-			expect(service1.getDeps()).toEqual({ host: "localhost", port: 5432 });
-			expect(service2.getDeps().host).toEqual("localhost");
-			expect(service2.getDeps().port).toEqual(5432);
+			expect(scope.resolve("service1").getDeps()).toEqual({
+				host: "localhost",
+				port: 5432,
+			});
+			expect(scope.resolve("service2").getDeps().host).toEqual("localhost");
+			expect(scope.resolve("service2").getDeps().port).toEqual(5432);
 		});
 
 		it("should allow multiple instances of the same dynamic module with different configs", () => {});
@@ -486,14 +455,12 @@ describe("DIContext", () => {
 				},
 			};
 
-			diContext.registerModules([AppModule.forRoot()]);
+			const appScope = registerAndGetScope(AppModule.forRoot());
 
-			const appScope = diContext.moduleScopes.get("AppModule");
-			const appService = appScope?.resolve("appService");
-			const loggerService = appScope?.resolve("loggerService");
-
-			expect(appService.getDepKeys()).toContain("loggerService");
-			expect(loggerService.getDeps().level).toBe("debug");
+			expect(appScope.resolve("appService").getDepKeys()).toContain(
+				"loggerService",
+			);
+			expect(appScope.resolve("loggerService").getDeps().level).toBe("debug");
 		});
 	});
 
@@ -502,13 +469,9 @@ describe("DIContext", () => {
 		class AnotherController extends ControllerBase {}
 
 		it("should call onController callback for each controller in a module", () => {
-			const moduleWithControllers: AnyModule = {
-				...anyModule,
-				name: "ControllerModule",
+			registerAndGetScope({
 				controllers: [TestController, AnotherController],
-			};
-
-			diContext.registerModules([moduleWithControllers]);
+			});
 
 			expect(onControllerMock).toHaveBeenCalledTimes(2);
 			expect(onControllerMock).toHaveBeenCalledWith(
@@ -522,16 +485,12 @@ describe("DIContext", () => {
 		});
 
 		it("should pass the correct scope to onController callback", () => {
-			const moduleWithController: AnyModule = {
-				...anyModule,
-				name: "ScopedControllerModule",
+			registerAndGetScope({
 				providers: {
 					testService: class TestService extends TestableBase {},
 				},
 				controllers: [TestController],
-			};
-
-			diContext.registerModules([moduleWithController]);
+			});
 
 			expect(onControllerMock).toHaveBeenCalledTimes(1);
 
@@ -541,60 +500,53 @@ describe("DIContext", () => {
 		});
 
 		it("should throw an error when a controller is registered in multiple modules", () => {
-			const firstModule: AnyModule = {
-				...anyModule,
-				name: "FirstModule",
-				controllers: [TestController],
-			};
-
-			const secondModule: AnyModule = {
-				...anyModule,
-				name: "SecondModule",
-				controllers: [TestController],
-			};
-
 			expect(() => {
-				diContext.registerModules([firstModule, secondModule]);
+				registerAndGetScope({
+					name: "TestModule",
+					imports: [
+						{
+							...anyModule,
+							name: "FirstModule",
+							controllers: [TestController],
+						},
+						{
+							...anyModule,
+							name: "SecondModule",
+							controllers: [TestController],
+						},
+					],
+				});
 			}).toThrow(
 				'Controller "TestController" is already registered in module "FirstModule". Attempted to register again in module "SecondModule".',
 			);
 		});
 
 		it("should not call onController callback when no controllers are defined", () => {
-			const moduleWithoutControllers: AnyModule = {
-				...anyModule,
-				name: "NoControllerModule",
+			registerAndGetScope({
 				providers: {
 					testService: class TestService extends TestableBase {},
 				},
-			};
-
-			diContext.registerModules([moduleWithoutControllers]);
+			});
 
 			expect(onControllerMock).not.toHaveBeenCalled();
 		});
 
 		it("should call onController for controllers in modules with imports", () => {
-			const importedModule: AnyModule = {
-				...anyModule,
-				name: "ImportedModule",
-				providers: {
-					sharedService: class SharedService extends TestableBase {},
-				},
-				exports: {
-					sharedService: class SharedService extends TestableBase {},
-				},
-				controllers: [TestController],
-			};
-
-			const mainModule: AnyModule = {
-				...anyModule,
-				name: "MainModule",
-				imports: [importedModule],
+			registerAndGetScope({
+				imports: [
+					{
+						...anyModule,
+						providers: {
+							sharedService: class SharedService extends TestableBase {},
+						},
+						exports: {
+							sharedService: class SharedService extends TestableBase {},
+						},
+						controllers: [TestController],
+					},
+				],
 				controllers: [AnotherController],
-			};
-
-			diContext.registerModules([mainModule]);
+			});
 
 			expect(onControllerMock).toHaveBeenCalledTimes(2);
 			expect(onControllerMock).toHaveBeenCalledWith(
