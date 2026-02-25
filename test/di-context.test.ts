@@ -7,15 +7,7 @@ import {
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-import {
-	CircularDependencyError,
-	ControllerAlreadyRegisteredError,
-	DependencyNotFoundError,
-	DuplicateControllersInModuleError,
-	DuplicateModuleImportError,
-	ProviderNameConflictError,
-} from "../lib/di-context.errors.js";
-
+import * as ERRORS from "../lib/di-context.errors.js";
 import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
 import type {
 	AnyModule,
@@ -90,7 +82,7 @@ describe("DIContext", () => {
 					name: "MainModule",
 					imports: [importedModule, importedModule],
 				});
-			}).toThrow(DuplicateModuleImportError);
+			}).toThrow(ERRORS.DuplicateModuleImportError);
 		});
 
 		it("should throw an error when a module has provider name conflicts with imported modules", () => {
@@ -112,7 +104,7 @@ describe("DIContext", () => {
 						sharedService: class ConflictingService extends TestableBase {},
 					},
 				});
-			}).toThrow(ProviderNameConflictError);
+			}).toThrow(ERRORS.ProviderNameConflictError);
 		});
 
 		it("should throw an error when factory provider depends on non-existent provider", () => {
@@ -127,7 +119,7 @@ describe("DIContext", () => {
 						},
 					},
 				});
-			}).toThrow(DependencyNotFoundError);
+			}).toThrow(ERRORS.DependencyNotFoundError);
 		});
 
 		it("should throw an error when factory providers have circular dependencies", () => {
@@ -155,7 +147,7 @@ describe("DIContext", () => {
 						},
 					},
 				});
-			}).toThrow(CircularDependencyError);
+			}).toThrow(ERRORS.CircularDependencyError);
 		});
 	});
 
@@ -575,7 +567,7 @@ describe("DIContext", () => {
 					name: "DuplicateControllerModule",
 					controllers: [TestController, TestController],
 				});
-			}).toThrow(DuplicateControllersInModuleError);
+			}).toThrow(ERRORS.DuplicateControllersInModuleError);
 		});
 
 		it("should not call onController callback when no controllers are defined", () => {
@@ -641,7 +633,7 @@ describe("DIContext", () => {
 						DynamicModule.forRoot({ value: "config2" }),
 					],
 				});
-			}).toThrow(ControllerAlreadyRegisteredError);
+			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
 		});
 
 		it("should allow dynamic modules to register when controllers are excluded from one instance", () => {
@@ -713,7 +705,7 @@ describe("DIContext", () => {
 						},
 					],
 				});
-			}).toThrow(ControllerAlreadyRegisteredError);
+			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
 		});
 
 		it("should allow the same static module instance to be imported multiple times", () => {

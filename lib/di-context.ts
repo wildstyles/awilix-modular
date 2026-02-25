@@ -9,16 +9,7 @@ import {
 	Lifetime,
 	type Resolver,
 } from "awilix";
-import {
-	CircularDependencyError,
-	ControllerAlreadyRegisteredError,
-	DependencyNotFoundError,
-	DuplicateControllersInModuleError,
-	DuplicateModuleImportError,
-	ProviderNameConflictError,
-	ProviderNotFoundError,
-	UnsupportedProviderTypeError,
-} from "./di-context.errors.js";
+import * as ERRORS from "./di-context.errors.js";
 import {
 	type ControllerConstructor,
 	type HandlerConstructor,
@@ -149,7 +140,10 @@ export class DIContext<TFramework = unknown> {
 						};
 					}
 
-					throw new UnsupportedProviderTypeError(key, importedModule.name);
+					throw new ERRORS.UnsupportedProviderTypeError(
+						key,
+						importedModule.name,
+					);
 				});
 			})
 			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
@@ -173,7 +167,7 @@ export class DIContext<TFramework = unknown> {
 
 					const factoryDeps = (provider.inject || []).map((key) => {
 						if (!scope.registrations[key]) {
-							throw new ProviderNotFoundError(key, m.name);
+							throw new ERRORS.ProviderNotFoundError(key, m.name);
 						}
 
 						return scope.registrations[key].resolve(scope);
@@ -249,7 +243,7 @@ export class DIContext<TFramework = unknown> {
 		if (!this.options.onController || !m.controllers?.length) return;
 
 		if (new Set(m.controllers).size !== m.controllers.length) {
-			throw new DuplicateControllersInModuleError(m.name);
+			throw new ERRORS.DuplicateControllersInModuleError(m.name);
 		}
 
 		for (const ControllerClass of m.controllers) {
@@ -267,7 +261,7 @@ export class DIContext<TFramework = unknown> {
 			}
 
 			// Different module trying to register the same controller - throw error
-			throw new ControllerAlreadyRegisteredError(
+			throw new ERRORS.ControllerAlreadyRegisteredError(
 				ControllerClass.name,
 				existingModule.name,
 			);
@@ -318,7 +312,7 @@ export class DIContext<TFramework = unknown> {
 					const depList = acc.graph.get(dep);
 
 					if (!depList) {
-						throw new DependencyNotFoundError(dep, m.name);
+						throw new ERRORS.DependencyNotFoundError(dep, m.name);
 					}
 
 					depList.push(key);
@@ -367,7 +361,7 @@ export class DIContext<TFramework = unknown> {
 		if (sortedKeys.length !== providerKeys.length) {
 			const remaining = providerKeys.filter((key) => !sortedKeys.includes(key));
 
-			throw new CircularDependencyError(m.name, remaining);
+			throw new ERRORS.CircularDependencyError(m.name, remaining);
 		}
 	}
 
@@ -376,7 +370,7 @@ export class DIContext<TFramework = unknown> {
 
 		for (const imported of m.imports) {
 			if (importedNames.has(imported.name)) {
-				throw new DuplicateModuleImportError(m.name, imported.name);
+				throw new ERRORS.DuplicateModuleImportError(m.name, imported.name);
 			}
 
 			importedNames.add(imported.name);
@@ -394,7 +388,7 @@ export class DIContext<TFramework = unknown> {
 		);
 
 		if (conflicts.length > 0) {
-			throw new ProviderNameConflictError(m.name, conflicts);
+			throw new ERRORS.ProviderNameConflictError(m.name, conflicts);
 		}
 	}
 }
