@@ -37,8 +37,6 @@ type ToProviderMap<
 // TODO: make any class constructor instead of object
 type ProviderMap = Record<string, object | string | boolean | number>;
 
-export type AnyModule = StaticModule<ModuleDef<any>>;
-
 // Helper type to map dependency keys to their actual types
 type MapKeysToValues<
 	DepsMap extends Record<string, unknown>,
@@ -185,15 +183,26 @@ export interface Controller<TFramework = unknown> {
 	registerRoutes: (framework: TFramework) => void;
 }
 
+type WithProviders<Def extends StaticModuleDef> =
+	Def["providers"] extends EmptyObject
+		? { providers?: ToProviderMap<Def["providers"], ExtractDeps<Def>> }
+		: { providers: ToProviderMap<Def["providers"], ExtractDeps<Def>> };
+
+type WithExports<Def extends StaticModuleDef> =
+	Def["exports"] extends EmptyObject
+		? { exports?: ToProviderMap<Def["exports"], ExtractDeps<Def>> }
+		: { exports: ToProviderMap<Def["exports"], ExtractDeps<Def>> };
+
+export type AnyModule = StaticModule<ModuleDef<any>>;
+
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
-	imports?: AnyModule[];
-	providers?: ToProviderMap<Def["providers"], ExtractDeps<Def>>;
-	exports?: ToProviderMap<Def["exports"], ExtractDeps<Def>>;
+	imports?: StaticModule<any>[];
 	queryHandlers?: HandlerConstructor[];
 	controllers?: ControllerConstructor<any>[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
-};
+} & WithProviders<Def> &
+	WithExports<Def>;
 
 type DynamicModuleOptions = {
 	registerControllers?: boolean;
