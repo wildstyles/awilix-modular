@@ -89,7 +89,7 @@ export class DIContext<TFramework = unknown> {
 		this.ensureImportedModulesUniqueness(m);
 		this.ensureNoProviderNameConflicts(m);
 
-		const importedModulesWithScope = m.imports.map((importedModule) => {
+		const importedModulesWithScope = (m.imports || []).map((importedModule) => {
 			return {
 				...this.registerModuleWithScope(
 					importedModule,
@@ -101,7 +101,7 @@ export class DIContext<TFramework = unknown> {
 
 		const resolvedExportedFromImports = importedModulesWithScope
 			.flatMap(({ module: importedModule, scope: importedScope }) => {
-				return Object.entries(importedModule.exports).map(([key, provider]) => {
+				return Object.entries(importedModule.exports || {}).map(([key, provider]) => {
 					const options = {
 						...this.options.providerOptions,
 						...importedModule.providerOptions,
@@ -268,7 +268,7 @@ export class DIContext<TFramework = unknown> {
 		}
 	}
 
-	private sortProvidersByDependencies(m: M): typeof m.providers {
+	private sortProvidersByDependencies(m: M): NonNullable<typeof m.providers> {
 		const depsGraph = this.buildDepGraph(m, this.initializeDepGraph(m));
 		const initialQueue = this.initializeQueue(depsGraph.inDegree);
 
@@ -279,8 +279,8 @@ export class DIContext<TFramework = unknown> {
 
 		this.ensureNoCyclicDependencies(m, sortedKeys);
 
-		return sortedKeys.reduce<typeof m.providers>((acc, key) => {
-			const provider = m.providers[key];
+		return sortedKeys.reduce<NonNullable<typeof m.providers>>((acc, key) => {
+			const provider = m.providers?.[key];
 			// Provider might be boolean. That's why not only undefined check
 			if (provider !== undefined) acc[key] = provider;
 
@@ -289,7 +289,7 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private initializeDepGraph(m: M): ProdiderDepsGraph {
-		return Object.keys(m.providers).reduce<ProdiderDepsGraph>(
+		return Object.keys(m.providers || {}).reduce<ProdiderDepsGraph>(
 			(acc, curr) => {
 				acc.graph.set(curr, []);
 				acc.inDegree.set(curr, 0);
@@ -304,7 +304,7 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private buildDepGraph(m: M, depsGraph: ProdiderDepsGraph): ProdiderDepsGraph {
-		return Object.entries(m.providers).reduce<ProdiderDepsGraph>(
+		return Object.entries(m.providers || {}).reduce<ProdiderDepsGraph>(
 			(acc, [key, provider]) => {
 				if (!isFactoryProvider(provider) || !provider.inject) return acc;
 
@@ -356,7 +356,7 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private ensureNoCyclicDependencies(m: M, sortedKeys: string[]) {
-		const providerKeys = Object.keys(m.providers);
+		const providerKeys = Object.keys(m.providers || {});
 
 		if (sortedKeys.length !== providerKeys.length) {
 			const remaining = providerKeys.filter((key) => !sortedKeys.includes(key));
@@ -368,7 +368,7 @@ export class DIContext<TFramework = unknown> {
 	private ensureImportedModulesUniqueness(m: M) {
 		const importedNames = new Set<string>();
 
-		for (const imported of m.imports) {
+		for (const imported of m.imports || []) {
 			if (importedNames.has(imported.name)) {
 				throw new ERRORS.DuplicateModuleImportError(m.name, imported.name);
 			}
@@ -378,9 +378,9 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private ensureNoProviderNameConflicts(m: M) {
-		const moduleProviderKeys = Object.keys(m.providers);
-		const importedProviderKeys = m.imports.flatMap((importedModule) =>
-			Object.keys(importedModule.exports),
+		const moduleProviderKeys = Object.keys(m.providers || {});
+		const importedProviderKeys = (m.imports || []).flatMap((importedModule) =>
+			Object.keys(importedModule.exports || {}),
 		);
 
 		const conflicts = importedProviderKeys.filter((key) =>

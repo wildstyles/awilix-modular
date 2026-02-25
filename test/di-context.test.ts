@@ -40,13 +40,6 @@ describe("DIContext", () => {
 		}
 	}
 
-	const anyModule: AnyModule = Object.freeze({
-		name: "AnyModule",
-		exports: {},
-		imports: [],
-		providers: {},
-	});
-
 	const rootProviders = {
 		logger: asValue({ info: vi.fn(), error: vi.fn() }),
 		config: asValue({ env: "test" }),
@@ -65,7 +58,7 @@ describe("DIContext", () => {
 		module: Partial<AnyModule>,
 	): ModuleScopeTree<AwilixContainer<{ [k: string]: TestableBase }>> {
 		return diContext.registerModule({
-			...anyModule,
+			name: "AnyModule",
 			...module,
 		});
 	}
@@ -73,7 +66,6 @@ describe("DIContext", () => {
 	describe("Ensure that module interactions/declarations are correct", () => {
 		it("should throw an error when a module has duplicate imports", () => {
 			const importedModule: AnyModule = {
-				...anyModule,
 				name: "SharedModule",
 			};
 
@@ -91,7 +83,7 @@ describe("DIContext", () => {
 					name: "MainModule",
 					imports: [
 						{
-							...anyModule,
+							name: "AnyModule",
 							providers: {
 								sharedService: class SharedService extends TestableBase {},
 							},
@@ -326,11 +318,10 @@ describe("DIContext", () => {
 	describe("Module Imports and Exports", () => {
 		it("should make exported providers from imported module available in importing module", () => {
 			const exportedModule: AnyModule = {
-				...anyModule,
 				name: "ExportedModule",
 				imports: [
 					{
-						...anyModule,
+						name: "AnyModule",
 						providers: {
 							internalService1: class InternalService1 extends TestableBase {},
 						},
@@ -399,7 +390,6 @@ describe("DIContext", () => {
 
 		it("should return importScopes map with all imported modules", () => {
 			const LoggerModule: AnyModule = {
-				...anyModule,
 				name: "LoggerModule",
 				providers: {
 					logger: class Logger extends TestableBase {},
@@ -410,7 +400,6 @@ describe("DIContext", () => {
 			};
 
 			const ConfigModule: AnyModule = {
-				...anyModule,
 				name: "ConfigModule",
 				imports: [LoggerModule],
 				providers: {
@@ -422,7 +411,6 @@ describe("DIContext", () => {
 			};
 
 			const { importedScopes } = diContext.registerModule({
-				...anyModule,
 				name: "AppModule",
 				imports: [LoggerModule, ConfigModule],
 				providers: {
@@ -451,7 +439,6 @@ describe("DIContext", () => {
 			const DatabaseModule = {
 				forRoot(config: { host: string; port: number }): AnyModule {
 					return {
-						...anyModule,
 						name: "DatabaseModule",
 						providers: {
 							host: config.host,
@@ -487,7 +474,6 @@ describe("DIContext", () => {
 			const LoggerModule = {
 				forRoot(config: { level: string }): AnyModule {
 					return {
-						...anyModule,
 						name: "LoggerModule",
 						providers: {
 							level: config.level,
@@ -503,7 +489,6 @@ describe("DIContext", () => {
 			const AppModule = {
 				forRoot(): AnyModule {
 					return {
-						...anyModule,
 						name: "AppModule",
 						imports: [
 							LoggerModule.forRoot({
@@ -584,7 +569,7 @@ describe("DIContext", () => {
 			registerModule({
 				imports: [
 					{
-						...anyModule,
+						name: "AnyModule",
 						providers: {
 							sharedService: class SharedService extends TestableBase {},
 						},
@@ -612,7 +597,6 @@ describe("DIContext", () => {
 			const DynamicModule = {
 				forRoot(config: { value: string }): AnyModule {
 					return {
-						...anyModule,
 						name: "DynamicModule",
 						controllers: [TestController],
 						providers: {
@@ -627,7 +611,7 @@ describe("DIContext", () => {
 					name: "AppModule",
 					imports: [
 						{
-							...anyModule,
+							name: "AnyModule",
 							imports: [DynamicModule.forRoot({ value: "config1" })],
 						},
 						DynamicModule.forRoot({ value: "config2" }),
@@ -645,7 +629,6 @@ describe("DIContext", () => {
 			> = {
 				forRoot(config, options) {
 					return {
-						...anyModule,
 						name: "DynamicModule",
 						controllers: options?.registerControllers ? [TestController] : [],
 						providers: {
@@ -659,7 +642,6 @@ describe("DIContext", () => {
 				name: "AppModule",
 				imports: [
 					{
-						...anyModule,
 						name: "StaticModule",
 						imports: [
 							DynamicModule.forRoot(
@@ -694,12 +676,10 @@ describe("DIContext", () => {
 					name: "AppModule",
 					imports: [
 						{
-							...anyModule,
 							name: "StaticModule1",
 							controllers: [TestController],
 						},
 						{
-							...anyModule,
 							name: "StaticModule2",
 							controllers: [TestController],
 						},
@@ -710,7 +690,6 @@ describe("DIContext", () => {
 
 		it("should allow the same static module instance to be imported multiple times", () => {
 			const sharedModule = {
-				...anyModule,
 				name: "SharedModule",
 				controllers: [TestController],
 			};
@@ -719,12 +698,10 @@ describe("DIContext", () => {
 				name: "AppModule",
 				imports: [
 					{
-						...anyModule,
 						name: "Module1",
 						imports: [sharedModule],
 					},
 					{
-						...anyModule,
 						name: "Module2",
 						imports: [sharedModule],
 					},

@@ -187,9 +187,9 @@ export interface Controller<TFramework = unknown> {
 
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
-	imports: AnyModule[];
-	providers: ToProviderMap<Def["providers"], ExtractDeps<Def>>;
-	exports: ToProviderMap<Def["exports"], ExtractDeps<Def>>;
+	imports?: AnyModule[];
+	providers?: ToProviderMap<Def["providers"], ExtractDeps<Def>>;
+	exports?: ToProviderMap<Def["exports"], ExtractDeps<Def>>;
 	queryHandlers?: HandlerConstructor[];
 	controllers?: ControllerConstructor<any>[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
