@@ -8,6 +8,7 @@ import {
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
+	CircularDependencyError,
 	ControllerAlreadyRegisteredError,
 	DependencyNotFoundError,
 	DuplicateControllersInModuleError,
@@ -127,6 +128,34 @@ describe("DIContext", () => {
 					},
 				});
 			}).toThrow(DependencyNotFoundError);
+		});
+
+		it("should throw an error when factory providers have circular dependencies", () => {
+			expect(() => {
+				registerModule({
+					name: "CircularDependencyModule",
+					providers: {
+						serviceA: {
+							provide: TestableBase,
+							inject: ["serviceB"],
+							useFactory: (serviceB: TestableBase) =>
+								new TestableBase({ serviceB }),
+						},
+						serviceB: {
+							provide: TestableBase,
+							inject: ["serviceC"],
+							useFactory: (serviceC: TestableBase) =>
+								new TestableBase({ serviceC }),
+						},
+						serviceC: {
+							provide: TestableBase,
+							inject: ["serviceA"],
+							useFactory: (serviceA: TestableBase) =>
+								new TestableBase({ serviceA }),
+						},
+					},
+				});
+			}).toThrow(CircularDependencyError);
 		});
 	});
 
