@@ -5,8 +5,8 @@ import type {
 	EmptyObject,
 	Module as M,
 	StaticModule,
-} from "../../lib/di-context.types.js";
-import { createFactoryProvider } from "../../lib/di-context.types.js";
+} from "../lib/di-context.types.js";
+import { createFactoryProvider } from "../lib/di-context.types.js";
 
 describe("Module", () => {
 	class P1 {
