@@ -9,6 +9,10 @@ declare const emptyObjectSymbol: unique symbol;
 export type EmptyObject = { [emptyObjectSymbol]?: never };
 type UnknownRecord = Record<PropertyKey, unknown>;
 
+type Constructor<T, Arguments extends unknown[] = any[]> = new (
+	...arguments_: Arguments
+) => T;
+
 /**
  * Common dependencies available to all modules.
  * Can be extended via declaration merging in consuming projects.
@@ -35,7 +39,6 @@ type ToProviderMap<
 			[K in keyof T]: T[K] extends object ? Provider<T[K], DepsMap> : T[K]; // Primitives pass through directly
 		};
 
-// TODO: make any class constructor instead of object
 type ProviderMap = Record<string, object | string | boolean | number>;
 
 // Helper type to map dependency keys to their actual types
@@ -60,10 +63,10 @@ type FactoryProvider<
 };
 
 type ClassProvider<T extends object> = {
-	useClass: new (...args: any[]) => T;
+	useClass: Constructor<T>;
 } & BuildResolverOptions<T>;
 
-type ConstructorProvider<T extends object = object> = new (...args: any[]) => T;
+type ConstructorProvider<T extends object = object> = Constructor<T>;
 
 type PrimitiveProvider = string | number | boolean | symbol | bigint;
 
@@ -73,8 +76,7 @@ type Provider<
 > =
 	| FactoryProvider<T, DepsMap, readonly (keyof DepsMap)[], false>
 	| ClassProvider<T>
-	| ConstructorProvider<T>
-	| PrimitiveProvider;
+	| ConstructorProvider<T>;
 
 // ============================================================================
 // Typed module definition with deps
@@ -170,13 +172,11 @@ type ExtractDeps<Def> = Def extends {
 	? D
 	: Record<string, unknown>;
 
-export type HandlerConstructor = {
-	new (...args: any[]): Handler<any, string>;
-};
+export type HandlerConstructor = Constructor<Handler<any, string>>;
 
-export type ControllerConstructor<TFramework = unknown> = {
-	new (...args: any[]): Controller<TFramework>;
-};
+export type ControllerConstructor<TFramework = unknown> = Constructor<
+	Controller<TFramework>
+>;
 
 export interface Controller<TFramework = unknown> {
 	registerRoutes: (framework: TFramework) => void;

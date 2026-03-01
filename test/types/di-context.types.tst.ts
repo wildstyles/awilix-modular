@@ -26,9 +26,18 @@ describe("Module", () => {
 	}
 
 	it("ensures factory providers", () => {});
-	// prevent { p1: '' } to be allowed
+
 	// dynamic modules the same
 	it("ensures different provider variants", () => {});
+
+	it("ensures primitives can be passed as providers", () => {
+		type M1 = M<D<{ providers: { p1: ""; p2: boolean; p3: true; p4: 2 } }>>;
+
+		expect({
+			name: "Module",
+			providers: { p1: "", p2: false, p3: true, p4: 2 },
+		} as const).type.toBeAssignableTo<M1>();
+	});
 
 	it("ensures providers in definition and declaration are the same", () => {
 		type M1 = M<
@@ -42,6 +51,16 @@ describe("Module", () => {
 			name: "Module",
 			providers: { p1: P1, p2: P2 },
 		}).type.toBeAssignableTo<M1>();
+		// Negative: Should NOT be assignable if provider types are wrong
+		expect({
+			name: "Module",
+			providers: { p1: true, p2: P2 },
+		}).type.not.toBeAssignableTo<M1>();
+		// Negative: Should NOT be assignable if provider types are wrong
+		expect({
+			name: "Module",
+			providers: { p1: P1, p2: "" },
+		}).type.not.toBeAssignableTo<M1>();
 		// Negative: Should NOT be assignable if provider types are swapped
 		expect({
 			name: "Module",
