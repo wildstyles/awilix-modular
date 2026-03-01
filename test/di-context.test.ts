@@ -181,14 +181,27 @@ describe("DIContext", () => {
 
 		it("should register factory providers correctly despite on order of registration", () => {
 			const { scope } = registerModule({
+				imports: [
+					{
+						name: "InnerModule",
+						providers: {
+							p1: class P1 extends TestableBase {},
+							innerService: class InnerService extends TestableBase {},
+						},
+						exports: {
+							innerService: class InnerService extends TestableBase {},
+						},
+					},
+				],
 				providers: {
 					factoryServiceA: {
 						provide: TestableBase,
-						inject: ["factoryServiceB", "serviceA"],
+						inject: ["factoryServiceB", "serviceA", "innerService"],
 						useFactory: (
 							factoryServiceB: TestableBase,
 							serviceA: TestableBase,
-						) => new TestableBase({ factoryServiceB, serviceA }),
+							innerService: TestableBase,
+						) => new TestableBase({ factoryServiceB, serviceA, innerService }),
 					},
 					factoryServiceB: {
 						provide: TestableBase,
@@ -200,28 +213,28 @@ describe("DIContext", () => {
 				},
 			});
 
-			expect(scope.resolve("serviceA").getDepKeys().length).toBe(
-				3 + rootResolversCount,
+			const serviceA = scope.resolve("serviceA");
+			const factoryServiceA = scope.resolve("factoryServiceA");
+			const factoryServiceB = scope.resolve("factoryServiceB");
+
+			expect(serviceA.getDepKeys().length).toBe(4 + rootResolversCount);
+			expect(serviceA.getDepKeys()).toContain("factoryServiceA");
+			expect(serviceA.getDepKeys()).toContain("factoryServiceB");
+			expect(serviceA.getDepKeys()).toContain("innerService");
+
+			expect(factoryServiceA.getDepKeys().length).toBe(3);
+			expect(factoryServiceA.getDepKeys()).toContain("factoryServiceB");
+			expect(factoryServiceA.getDepKeys()).toContain("serviceA");
+			expect(factoryServiceA.getDepKeys()).toContain("innerService");
+			expect(factoryServiceA.getDeps().innerService.getDepKeys().length).toBe(
+				2 + rootResolversCount,
 			);
-			expect(scope.resolve("serviceA").getDepKeys()).toContain(
-				"factoryServiceA",
-			);
-			expect(scope.resolve("serviceA").getDepKeys()).toContain(
-				"factoryServiceB",
+			expect(factoryServiceA.getDeps().innerService.getDepKeys()).toContain(
+				"p1",
 			);
 
-			expect(scope.resolve("factoryServiceA").getDepKeys().length).toBe(2);
-			expect(scope.resolve("factoryServiceA").getDepKeys()).toContain(
-				"factoryServiceB",
-			);
-			expect(scope.resolve("factoryServiceA").getDepKeys()).toContain(
-				"serviceA",
-			);
-
-			expect(scope.resolve("factoryServiceB").getDepKeys().length).toBe(1);
-			expect(scope.resolve("factoryServiceB").getDepKeys()).toContain(
-				"serviceA",
-			);
+			expect(factoryServiceB.getDepKeys().length).toBe(1);
+			expect(factoryServiceB.getDepKeys()).toContain("serviceA");
 		});
 	});
 
@@ -316,6 +329,60 @@ describe("DIContext", () => {
 	});
 
 	describe("Module Imports and Exports", () => {
+		it("should exported factory providers to have correct deps", () => {
+			class P1 extends TestableBase {}
+			class P2 extends TestableBase {}
+			class P3 extends TestableBase {}
+			class P4 extends TestableBase {}
+
+			const M1: AnyModule = {
+				name: "M1",
+				providers: {
+					p1: P1,
+					p3: P3,
+				},
+				exports: {
+					p1: P1,
+				},
+			};
+
+			const M2: AnyModule = {
+				name: "M2",
+				imports: [M1],
+				providers: {
+					p2: {
+						provide: P2,
+						inject: ["p1"],
+						useFactory: (p1: TestableBase) => new P2({ p1 }),
+					},
+				},
+				exports: {
+					p2: {
+						provide: {
+							useClass: P2,
+							lifetime: Lifetime.SINGLETON,
+						},
+						inject: ["p1"],
+						useFactory: (p1: TestableBase) => new P2({ p1 }),
+					},
+				},
+			};
+
+			const { scope } = registerModule({
+				imports: [M2],
+				providers: {
+					p4: P4,
+				},
+			});
+
+			const p2 = scope.resolve("p2");
+
+			expect(p2.getDepKeys()).toContain("p1");
+			expect(p2.getDepKeys().length).toBe(1);
+			expect(p2.getDeps().p1.getName()).toBe("P1");
+			expect(scope.registrations.p2.lifetime).toBe(Lifetime.SINGLETON);
+		});
+
 		it("should make exported providers from imported module available in importing module", () => {
 			const exportedModule: AnyModule = {
 				name: "ExportedModule",

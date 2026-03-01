@@ -117,13 +117,38 @@ export class DIContext<TFramework = unknown> {
 							};
 						}
 
-						// TODO: add factory providers
 						if (isCostructorProvider(provider)) {
 							return {
 								key,
 								provider,
 								scope: importedScope,
 								options,
+							};
+						}
+
+						if (isFactoryProvider(provider)) {
+							const { useClass, ...awilixOptions } = isClassProvider(
+								provider.provide,
+							)
+								? provider.provide
+								: {};
+
+							const factoryDeps = (provider.inject || []).map((key) => {
+								if (!importedScope.registrations[key]) {
+									throw new ERRORS.ProviderNotFoundError(key, m.name);
+								}
+
+								return importedScope.registrations[key].resolve(scope);
+							});
+
+							return {
+								key,
+								provider: () => provider.useFactory(...factoryDeps),
+								scope: importedScope,
+								options: {
+									...options,
+									...awilixOptions,
+								},
 							};
 						}
 
@@ -306,6 +331,12 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private buildDepGraph(m: M, depsGraph: ProdiderDepsGraph): ProdiderDepsGraph {
+		const importedProviderKeys = new Set(
+			(m.imports || []).flatMap((importedModule) =>
+				Object.keys(importedModule.exports || {}),
+			),
+		);
+
 		return Object.entries(m.providers || {}).reduce<ProdiderDepsGraph>(
 			(acc, [key, provider]) => {
 				if (!isFactoryProvider(provider) || !provider.inject) return acc;
@@ -313,12 +344,16 @@ export class DIContext<TFramework = unknown> {
 				provider.inject.forEach((dep) => {
 					const depList = acc.graph.get(dep);
 
-					if (!depList) {
-						throw new ERRORS.DependencyNotFoundError(dep, m.name);
+					if (depList) {
+						depList.push(key);
+						acc.inDegree.set(key, (acc.inDegree.get(key) || 0) + 1);
+
+						return;
 					}
 
-					depList.push(key);
-					acc.inDegree.set(key, (acc.inDegree.get(key) || 0) + 1);
+					if (!depList && !importedProviderKeys.has(dep)) {
+						throw new ERRORS.DependencyNotFoundError(dep, m.name);
+					}
 				});
 
 				return acc;

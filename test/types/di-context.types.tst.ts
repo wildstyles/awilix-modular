@@ -112,10 +112,16 @@ describe("Module", () => {
 	});
 
 	it("ensures primitives can be passed as providers", () => {
-		type M1 = M<D<{ providers: { p1: ""; p2: boolean; p3: true; p4: 2 } }>>;
+		type M1 = M<
+			D<{
+				providers: { p1: ""; p2: boolean; p3: true; p4: 2 };
+				exportKeys: "p3";
+			}>
+		>;
 
 		expect({
 			name: "Module",
+			exports: { p3: true },
 			providers: { p1: "", p2: false, p3: true, p4: 2 },
 		} as const).type.toBeAssignableTo<M1>();
 	});
