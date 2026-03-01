@@ -101,50 +101,52 @@ export class DIContext<TFramework = unknown> {
 
 		const resolvedExportedFromImports = importedModulesWithScope
 			.flatMap(({ module: importedModule, scope: importedScope }) => {
-				return Object.entries(importedModule.exports || {}).map(([key, provider]) => {
-					const options = {
-						...this.options.providerOptions,
-						...importedModule.providerOptions,
-					};
-
-					if (isPrimitive(provider)) {
-						return {
-							key,
-							scope: null,
-							provider,
-							options,
+				return Object.entries(importedModule.exports || {}).map(
+					([key, provider]) => {
+						const options = {
+							...this.options.providerOptions,
+							...importedModule.providerOptions,
 						};
-					}
 
-					// TODO: add factory providers
-					if (isCostructorProvider(provider)) {
-						return {
+						if (isPrimitive(provider)) {
+							return {
+								key,
+								scope: null,
+								provider,
+								options,
+							};
+						}
+
+						// TODO: add factory providers
+						if (isCostructorProvider(provider)) {
+							return {
+								key,
+								provider,
+								scope: importedScope,
+								options,
+							};
+						}
+
+						if (isClassProvider(provider)) {
+							const { useClass, ...awilixOptions } = provider;
+
+							return {
+								key,
+								provider: useClass,
+								scope: importedScope,
+								options: {
+									...options,
+									...awilixOptions,
+								},
+							};
+						}
+
+						throw new ERRORS.UnsupportedProviderTypeError(
 							key,
-							provider,
-							scope: importedScope,
-							options,
-						};
-					}
-
-					if (isClassProvider(provider)) {
-						const { useClass, ...awilixOptions } = provider;
-
-						return {
-							key,
-							provider: useClass,
-							scope: importedScope,
-							options: {
-								...options,
-								...awilixOptions,
-							},
-						};
-					}
-
-					throw new ERRORS.UnsupportedProviderTypeError(
-						key,
-						importedModule.name,
-					);
-				});
+							importedModule.name,
+						);
+					},
+				);
 			})
 			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
 				acc[curr.key] = curr.scope

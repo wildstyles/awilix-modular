@@ -93,28 +93,26 @@ type ResolveExports<
 		: EmptyObject
 	: EmptyObject;
 
-type ResolveImports<D extends { imports?: AnyModule[] }> =
-	D["imports"] extends AnyModule[] ? D["imports"] : [];
+type ResolveImports<D extends { imports?: readonly AnyModule[] }> =
+	D["imports"] extends readonly AnyModule[] ? D["imports"] : [];
 
 type ExtractModuleDefFromModule<T> =
-	T extends StaticModule<infer TDef> ? TDef : never;
+	T extends StaticModule<infer TDef extends BaseModuleDef> ? TDef : never;
 
-type ExtractExportsFromImports<T extends AnyModule[]> = T extends [
-	infer First,
-	...infer Rest extends AnyModule[],
-]
-	? ExtractModuleDefFromModule<First> extends { exports: infer E }
-		? E & ExtractExportsFromImports<Rest>
-		: ExtractExportsFromImports<Rest>
-	: EmptyObject;
+type ExtractExportsFromImports<T extends readonly AnyModule[]> =
+	T extends readonly [infer First, ...infer Rest extends readonly AnyModule[]]
+		? ExtractModuleDefFromModule<First> extends { exports: infer E }
+			? E & ExtractExportsFromImports<Rest>
+			: ExtractExportsFromImports<Rest>
+		: EmptyObject;
 
 type ResolveDeps<
 	D extends {
 		providers?: ProviderMap;
-		imports?: AnyModule[];
+		imports?: readonly AnyModule[];
 	},
 > = ResolveProviders<D> &
-	(D["imports"] extends AnyModule[]
+	(D["imports"] extends readonly AnyModule[]
 		? ExtractExportsFromImports<D["imports"]>
 		: ProviderMap) &
 	CommonDependencies;
@@ -130,7 +128,7 @@ export type ModuleDef<
 		exportKeys?: D["providers"] extends ProviderMap
 			? keyof D["providers"]
 			: never;
-		imports?: AnyModule[];
+		imports?: readonly AnyModule[];
 		forRootConfig?: UnknownRecord;
 	},
 > = {
@@ -193,16 +191,22 @@ type WithExports<Def extends StaticModuleDef> =
 		? { exports?: ToProviderMap<Def["exports"], ExtractDeps<Def>> }
 		: { exports: ToProviderMap<Def["exports"], ExtractDeps<Def>> };
 
-export type AnyModule = StaticModule<ModuleDef<any>>;
+type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
+	? { imports?: StaticModule<any>[] } // Def is 'any' - use loose typing
+	: Def["imports"] extends []
+		? { imports?: [] }
+		: { imports: Def["imports"] };
+
+export type AnyModule = StaticModule<any>;
 
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
-	imports?: StaticModule<any>[];
 	queryHandlers?: HandlerConstructor[];
 	controllers?: ControllerConstructor<any>[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &
-	WithExports<Def>;
+	WithExports<Def> &
+	WithImports<Def>;
 
 type DynamicModuleOptions = {
 	registerControllers?: boolean;
