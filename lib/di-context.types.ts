@@ -23,7 +23,8 @@ type UnknownRecord = Record<PropertyKey, unknown>;
  * }
  * ```
  */
-export interface CommonDependencies extends UnknownRecord {}
+// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
+export interface CommonDependencies {}
 
 type ToProviderMap<
 	T extends ProviderMap,
