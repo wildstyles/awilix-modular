@@ -1,5 +1,4 @@
 import { describe, expect, it } from "tstyche";
-
 import type {
 	CommonDependencies,
 	ModuleDef as D,
@@ -7,6 +6,7 @@ import type {
 	Module as M,
 	StaticModule,
 } from "../../lib/di-context.types.js";
+import { createFactoryProvider } from "../../lib/di-context.types.js";
 
 describe("Module", () => {
 	class P1 {
@@ -25,10 +25,91 @@ describe("Module", () => {
 		private declare readonly __brand: never;
 	}
 
-	it("ensures factory providers", () => {});
+	it("ensures ClassProvider can be passed as provider", () => {
+		type M1 = M<D<{ providers: { p1: P1; p2: P2 } }>>;
 
-	// dynamic modules the same
-	it("ensures different provider variants", () => {});
+		// Positive: Should accept useClass provider
+		expect({
+			name: "Module",
+			providers: {
+				p1: { useClass: P1 },
+				p2: { useClass: P2 },
+			},
+		}).type.toBeAssignableTo<M1>();
+		// Positive: Should accept useClass with options
+		expect({
+			name: "Module",
+			providers: {
+				p1: { useClass: P1, lifetime: "SINGLETON" as const },
+				p2: { useClass: P2, lifetime: "SCOPED" as const },
+			},
+		}).type.toBeAssignableTo<M1>();
+		// Negative: Should NOT accept wrong class type
+		expect({
+			name: "Module",
+			providers: {
+				p1: { useClass: P2 },
+				p2: { useClass: P2 },
+			},
+		}).type.not.toBeAssignableTo<M1>();
+	});
+
+	it("ensures FactoryProvider can be passed as provider", () => {
+		type M1 = M<D<{ providers: { p1: P1; p2: P2 } }>>;
+
+		// Positive: Should accept factory provider with provide and useFactory
+		expect({
+			name: "Module",
+			providers: {
+				p1: {
+					provide: P1,
+					useFactory: () => new P1(),
+				},
+				p2: P2,
+			},
+		}).type.toBeAssignableTo<M1>();
+		// Negative: Should NOT accept factory that returns wrong type
+		expect({
+			name: "Module",
+			providers: {
+				p1: {
+					provide: P1,
+					useFactory: () => new P2(),
+				},
+				p2: P2,
+			},
+		}).type.not.toBeAssignableTo<M1>();
+	});
+
+	it("ensures createFactoryProvider infers DepsMap from module", () => {
+		type M1Def = D<{
+			providers: { p1: P1; p2: P2; p3: P3 };
+		}>;
+		type Deps = M1Def["deps"];
+
+		const factory = createFactoryProvider<Deps>();
+
+		factory({
+			provide: P4,
+			inject: ["p1", "p2"] as const,
+			useFactory: (_p1, _p2) => {
+				expect<typeof _p1>().type.toBe<P1>();
+				expect<typeof _p2>().type.toBe<P2>();
+
+				return new P4();
+			},
+		});
+
+		expect(
+			factory({
+				provide: P4,
+				inject: ["p1", "p2"] as const,
+				useFactory: (_p1, _p2, _p3) => {
+					return new P4();
+				},
+			}),
+		).type.toRaiseError();
+	});
 
 	it("ensures primitives can be passed as providers", () => {
 		type M1 = M<D<{ providers: { p1: ""; p2: boolean; p3: true; p4: 2 } }>>;

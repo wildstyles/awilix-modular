@@ -30,8 +30,8 @@ type Constructor<T, Arguments extends unknown[] = any[]> = new (
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
 export interface CommonDependencies {}
 
-type ToProviderMap<
-	T extends ProviderMap,
+type ToModuleProviderMap<
+	T extends DefProviderMap,
 	DepsMap extends Record<string, unknown> = Record<string, unknown>,
 > = [keyof T] extends [never]
 	? EmptyObject
@@ -39,7 +39,7 @@ type ToProviderMap<
 			[K in keyof T]: T[K] extends object ? Provider<T[K], DepsMap> : T[K]; // Primitives pass through directly
 		};
 
-type ProviderMap = Record<string, object | string | boolean | number>;
+type DefProviderMap = Record<string, object | string | boolean | number>;
 
 // Helper type to map dependency keys to their actual types
 type MapKeysToValues<
@@ -82,15 +82,15 @@ type Provider<
 // Typed module definition with deps
 // ============================================================================
 
-type ResolveProviders<D extends { providers?: ProviderMap }> =
-	D["providers"] extends ProviderMap ? D["providers"] : EmptyObject;
+type ResolveProviders<D extends { providers?: DefProviderMap }> =
+	D["providers"] extends DefProviderMap ? D["providers"] : EmptyObject;
 
 type ResolveExports<
 	D extends {
-		providers?: ProviderMap;
+		providers?: DefProviderMap;
 		exportKeys?: keyof NonNullable<D["providers"]>;
 	},
-> = D["providers"] extends ProviderMap
+> = D["providers"] extends DefProviderMap
 	? D["exportKeys"] extends keyof D["providers"]
 		? Pick<D["providers"], D["exportKeys"]>
 		: EmptyObject
@@ -111,13 +111,13 @@ type ExtractExportsFromImports<T extends readonly AnyModule[]> =
 
 type ResolveDeps<
 	D extends {
-		providers?: ProviderMap;
+		providers?: DefProviderMap;
 		imports?: readonly AnyModule[];
 	},
 > = ResolveProviders<D> &
 	(D["imports"] extends readonly AnyModule[]
 		? ExtractExportsFromImports<D["imports"]>
-		: ProviderMap) &
+		: DefProviderMap) &
 	CommonDependencies;
 
 type ResolveForRootConfig<D extends Partial<WithForRootConfig>> =
@@ -127,8 +127,8 @@ type ResolveForRootConfig<D extends Partial<WithForRootConfig>> =
 
 export type ModuleDef<
 	D extends {
-		providers?: ProviderMap;
-		exportKeys?: D["providers"] extends ProviderMap
+		providers?: DefProviderMap;
+		exportKeys?: D["providers"] extends DefProviderMap
 			? keyof D["providers"]
 			: never;
 		imports?: readonly AnyModule[];
@@ -154,8 +154,8 @@ export type ExtractModuleDef<T> = T extends {
 // ============================================================================
 
 type BaseModuleDef = {
-	providers: ProviderMap;
-	exports: ProviderMap;
+	providers: DefProviderMap;
+	exports: DefProviderMap;
 	imports: AnyModule[];
 };
 
@@ -184,13 +184,13 @@ export interface Controller<TFramework = unknown> {
 
 type WithProviders<Def extends StaticModuleDef> =
 	Def["providers"] extends EmptyObject
-		? { providers?: ToProviderMap<Def["providers"], ExtractDeps<Def>> }
-		: { providers: ToProviderMap<Def["providers"], ExtractDeps<Def>> };
+		? { providers?: ToModuleProviderMap<Def["providers"], ExtractDeps<Def>> }
+		: { providers: ToModuleProviderMap<Def["providers"], ExtractDeps<Def>> };
 
 type WithExports<Def extends StaticModuleDef> =
 	Def["exports"] extends EmptyObject
-		? { exports?: ToProviderMap<Def["exports"], ExtractDeps<Def>> }
-		: { exports: ToProviderMap<Def["exports"], ExtractDeps<Def>> };
+		? { exports?: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
+		: { exports: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> };
 
 type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
 	? { imports?: StaticModule<any>[] } // Def is 'any' - use loose typing
