@@ -15,6 +15,7 @@ import type {
 	Module,
 	ModuleDef,
 } from "../lib/di-context.types.js";
+import { createStaticModule } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
 	let diContext: DIContext;
@@ -688,20 +689,19 @@ describe("DIContext", () => {
 		});
 
 		it("should allow dynamic modules to register when controllers are excluded from one instance", () => {
-			const DynamicModule: Module<
-				ModuleDef<{
-					providers: { config: string };
-					forRootConfig: { value: string };
-				}>
-			> = {
+			type Def = ModuleDef<{
+				providers: { config: string };
+				forRootConfig: { value: string };
+			}>;
+			const DynamicModule: Module<Def> = {
 				forRoot(config, options) {
-					return {
+					return createStaticModule({
 						name: "DynamicModule",
 						controllers: options?.registerControllers ? [TestController] : [],
 						providers: {
 							config: config.value,
 						},
-					};
+					});
 				},
 			};
 

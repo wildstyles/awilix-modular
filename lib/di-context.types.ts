@@ -154,9 +154,9 @@ export type ExtractModuleDef<T> = T extends {
 // ============================================================================
 
 type BaseModuleDef = {
-	providers: DefProviderMap;
-	exports: DefProviderMap;
-	imports: AnyModule[];
+	providers?: DefProviderMap;
+	exports?: DefProviderMap;
+	imports?: AnyModule[];
 };
 
 type WithForRootConfig = {
@@ -183,20 +183,26 @@ export interface Controller<TFramework = unknown> {
 }
 
 type WithProviders<Def extends StaticModuleDef> =
-	Def["providers"] extends EmptyObject
-		? { providers?: ToModuleProviderMap<Def["providers"], ExtractDeps<Def>> }
-		: { providers: ToModuleProviderMap<Def["providers"], ExtractDeps<Def>> };
+	Def["providers"] extends DefProviderMap
+		? Def["providers"] extends EmptyObject
+			? { providers?: ToModuleProviderMap<Def["providers"], ExtractDeps<Def>> }
+			: { providers: ToModuleProviderMap<Def["providers"], ExtractDeps<Def>> }
+		: { providers?: never };
 
 type WithExports<Def extends StaticModuleDef> =
-	Def["exports"] extends EmptyObject
-		? { exports?: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
-		: { exports: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> };
+	Def["exports"] extends DefProviderMap
+		? Def["exports"] extends EmptyObject
+			? { exports?: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
+			: { exports: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
+		: { exports?: never };
 
 type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
 	? { imports?: StaticModule<any>[] } // Def is 'any' - use loose typing
-	: Def["imports"] extends []
-		? { imports?: [] }
-		: { imports: Def["imports"] };
+	: Def["imports"] extends AnyModule[]
+		? Def["imports"] extends []
+			? { imports?: [] }
+			: { imports: Def["imports"] }
+		: { imports?: never };
 
 export type AnyModule = StaticModule<any>;
 
@@ -222,6 +228,12 @@ type DynamicModule<TDef extends DynamicModuleDef> = {
 
 export type Module<TDef extends BaseModuleDef & Partial<WithForRootConfig>> =
 	TDef extends WithForRootConfig ? DynamicModule<TDef> : StaticModule<TDef>;
+
+export function createStaticModule<TDef extends BaseModuleDef>(
+	module: StaticModule<TDef>,
+): StaticModule<TDef> {
+	return module;
+}
 
 // ===========================================================================
 // Narrow type checks
