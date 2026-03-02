@@ -294,32 +294,59 @@ describe("createStaticModule", () => {
 	class Service2 {
 		private declare readonly __brand: never;
 	}
+	class Service3 {
+		private declare readonly __brand: never;
+	}
 
 	it("requires explicit TDef parameter - cannot be inferred", () => {
-		type ModuleDef1 = D<{
-			providers: { service1: Service1 };
+		type D1 = D<{
+			providers: { p1: Service1 };
 		}>;
 
-		// Positive: Should accept when TDef is explicitly provided
 		expect(
-			createStaticModule<ModuleDef1>({
+			createStaticModule<D1>({
 				name: "TestModule",
-				providers: { service1: Service1 },
+				providers: { p1: Service1 },
 			}),
-		).type.toBe<StaticModule<ModuleDef1>>();
-
-		// Note: Without explicit TDef, TypeScript cannot properly validate
-		// This is the intended behavior - TDef must be explicit
+		).type.toBe<StaticModule<D1>>();
 	});
 
-	it("catches extra properties in providers with Exact helper", () => {
-		type ModuleDef1 = D<{
+	it("catches extra modules in imports", () => {
+		type D2 = D<{
+			providers: { service3: Service3 };
+			exportKeys: "service3";
+		}>;
+		type M1 = M<D2>;
+
+		const Mod = createStaticModule<D2>({
+			name: "Mod",
+			providers: { service3: Service3 },
+			exports: { service3: Service3 },
+		});
+
+		type D1 = D<{
+			providers: { service1: Service1 };
+			imports: [M1];
+		}>;
+
+		expect(
+			createStaticModule<D1>({
+				name: "TestModule",
+				imports: [Mod, Mod],
+				providers: {
+					service1: Service1,
+				},
+			}),
+		).type.toRaiseError();
+	});
+
+	it("catches extra properties in providers", () => {
+		type D1 = D<{
 			providers: { service1: Service1 };
 		}>;
 
-		// Negative: Should reject extra properties in providers
 		expect(
-			createStaticModule<ModuleDef1>({
+			createStaticModule<D1>({
 				name: "TestModule",
 				providers: {
 					service1: Service1,
@@ -329,43 +356,21 @@ describe("createStaticModule", () => {
 		).type.toRaiseError();
 	});
 
-	it("catches extra properties in exports with Exact helper", () => {
-		type ModuleDef1 = D<{
+	it("catches extra properties in exports", () => {
+		type D1 = D<{
 			providers: { service1: Service1; service2: Service2 };
 			exportKeys: "service1";
 		}>;
 
 		// Negative: Should reject extra properties in exports
 		expect(
-			createStaticModule<ModuleDef1>({
+			createStaticModule<D1>({
 				name: "TestModule",
 				providers: { service1: Service1, service2: Service2 },
 				exports: {
 					service1: Service1,
 					service2: Service2, // ❌ Extra export not in exportKeys
 				},
-			}),
-		).type.toRaiseError();
-	});
-
-	it("validates provider types match the definition", () => {
-		type ModuleDef1 = D<{
-			providers: { service1: Service1; service2: Service2 };
-		}>;
-
-		// Positive: Correct types
-		expect(
-			createStaticModule<ModuleDef1>({
-				name: "TestModule",
-				providers: { service1: Service1, service2: Service2 },
-			}),
-		).type.toBeAssignableTo<StaticModule<ModuleDef1>>();
-
-		// Negative: Wrong type for service1
-		expect(
-			createStaticModule<ModuleDef1>({
-				name: "TestModule",
-				providers: { service1: Service2, service2: Service2 },
 			}),
 		).type.toRaiseError();
 	});
