@@ -235,6 +235,18 @@ export function createStaticModule<TDef extends BaseModuleDef>(
 	return module;
 }
 
+export function createDynamicModule<TDef extends DynamicModuleDef>(
+	factory: (
+		config: TDef["forRootConfig"],
+		options?: DynamicModuleOptions,
+	) => StaticModule<TDef>,
+): DynamicModule<TDef> {
+	return {
+		forRoot(config, options) {
+			return factory(config, options);
+		},
+	};
+}
 // ===========================================================================
 // Narrow type checks
 // ===========================================================================

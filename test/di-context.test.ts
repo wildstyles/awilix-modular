@@ -12,10 +12,12 @@ import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
 import type {
 	AnyModule,
 	Controller,
-	Module,
 	ModuleDef,
 } from "../lib/di-context.types.js";
-import { createStaticModule } from "../lib/di-context.types.js";
+import {
+	createStaticModule,
+	createDynamicModule,
+} from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
 	let diContext: DIContext;
@@ -693,17 +695,16 @@ describe("DIContext", () => {
 				providers: { config: string };
 				forRootConfig: { value: string };
 			}>;
-			const DynamicModule: Module<Def> = {
-				forRoot(config, options) {
-					return createStaticModule({
-						name: "DynamicModule",
-						controllers: options?.registerControllers ? [TestController] : [],
-						providers: {
-							config: config.value,
-						},
-					});
-				},
-			};
+
+			const DynamicModule = createDynamicModule<Def>((config, options) =>
+				createStaticModule({
+					name: "DynamicModule",
+					controllers: options?.registerControllers ? [TestController] : [],
+					providers: {
+						config: config.value,
+					},
+				}),
+			);
 
 			const { importedScopes } = registerModule({
 				name: "AppModule",
