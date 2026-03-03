@@ -15,8 +15,8 @@ import type {
 	ModuleDef,
 } from "../lib/di-context.types.js";
 import {
-	createStaticModule,
 	createDynamicModule,
+	createStaticModule,
 } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {

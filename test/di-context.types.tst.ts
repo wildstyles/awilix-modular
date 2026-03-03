@@ -2,14 +2,14 @@ import { describe, expect, it } from "tstyche";
 import type {
 	CommonDependencies,
 	ModuleDef as D,
+	DynamicModule as DM,
 	EmptyObject,
 	StaticModule as M,
-	DynamicModule as DM,
 } from "../lib/di-context.types.js";
 import {
+	createDynamicModule,
 	createFactoryProvider,
 	createStaticModule,
-	createDynamicModule,
 } from "../lib/di-context.types.js";
 
 describe("Module", () => {
@@ -369,6 +369,21 @@ describe("createStaticModule", () => {
 					service1: Service1,
 					service2: Service2, // ❌ Extra export not in exportKeys
 				},
+			}),
+		).type.toRaiseError();
+	});
+
+	it("rejects DynamicModuleDef (with forRootConfig)", () => {
+		type D1 = D<{
+			providers: { service1: Service1 };
+			forRootConfig: { value: string }; // ❌ Has forRootConfig - this is a DynamicModuleDef
+		}>;
+
+		// Negative: Should reject DynamicModuleDef
+		expect(
+			createStaticModule<D1>({
+				name: "TestModule",
+				providers: { service1: Service1 },
 			}),
 		).type.toRaiseError();
 	});

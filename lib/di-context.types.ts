@@ -272,7 +272,7 @@ export function createFactoryProvider<DepsMap extends Record<string, any>>() {
 }
 
 export function createStaticModule<TDef extends StaticModuleDef>(
-	module: StaticModule<TDef>,
+	module: TDef extends DynamicModuleDef ? never : StaticModule<TDef>,
 ): StaticModule<TDef> {
 	return module;
 }
