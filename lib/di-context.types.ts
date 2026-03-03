@@ -100,7 +100,7 @@ type ResolveImports<D extends { imports?: readonly AnyModule[] }> =
 	D["imports"] extends readonly AnyModule[] ? D["imports"] : [];
 
 type ExtractModuleDefFromModule<T> =
-	T extends StaticModule<infer TDef extends BaseModuleDef> ? TDef : never;
+	T extends StaticModule<infer TDef extends StaticModuleDef> ? TDef : never;
 
 type ExtractExportsFromImports<T extends readonly AnyModule[]> =
 	T extends readonly [infer First, ...infer Rest extends readonly AnyModule[]]
@@ -153,18 +153,16 @@ export type ExtractModuleDef<T> = T extends {
 // Concrete module definition based on typed definition
 // ============================================================================
 
-type BaseModuleDef = {
-	providers?: DefProviderMap;
-	exports?: DefProviderMap;
-	imports?: AnyModule[];
-};
-
 type WithForRootConfig = {
 	forRootConfig: UnknownRecord;
 };
 
-type StaticModuleDef = BaseModuleDef;
-type DynamicModuleDef = BaseModuleDef & WithForRootConfig;
+type StaticModuleDef = {
+	providers?: DefProviderMap;
+	exports?: DefProviderMap;
+	imports?: AnyModule[];
+};
+type DynamicModuleDef = StaticModuleDef & WithForRootConfig;
 
 type ExtractDeps<Def> = Def extends {
 	deps: infer D;
@@ -215,38 +213,17 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	WithExports<Def> &
 	WithImports<Def>;
 
-type DynamicModuleOptions = {
+export type DynamicModuleOptions = {
 	registerControllers?: boolean;
 };
 
-type DynamicModule<TDef extends DynamicModuleDef> = {
+export type DynamicModule<TDef extends DynamicModuleDef> = {
 	forRoot(
 		config: TDef["forRootConfig"],
 		options?: DynamicModuleOptions,
 	): StaticModule<TDef>;
 };
 
-export type Module<TDef extends BaseModuleDef & Partial<WithForRootConfig>> =
-	TDef extends WithForRootConfig ? DynamicModule<TDef> : StaticModule<TDef>;
-
-export function createStaticModule<TDef extends BaseModuleDef>(
-	module: StaticModule<TDef>,
-): StaticModule<TDef> {
-	return module;
-}
-
-export function createDynamicModule<TDef extends DynamicModuleDef>(
-	factory: (
-		config: TDef["forRootConfig"],
-		options?: DynamicModuleOptions,
-	) => StaticModule<TDef>,
-): DynamicModule<TDef> {
-	return {
-		forRoot(config, options) {
-			return factory(config, options);
-		},
-	};
-}
 // ===========================================================================
 // Narrow type checks
 // ===========================================================================
@@ -291,5 +268,24 @@ export function createFactoryProvider<DepsMap extends Record<string, any>>() {
 		provider: FactoryProvider<T, DepsMap, Keys>,
 	): FactoryProvider<T, DepsMap, Keys> => {
 		return provider;
+	};
+}
+
+export function createStaticModule<TDef extends StaticModuleDef>(
+	module: StaticModule<TDef>,
+): StaticModule<TDef> {
+	return module;
+}
+
+export function createDynamicModule<TDef extends DynamicModuleDef>(
+	factory: (
+		config: TDef["forRootConfig"],
+		options?: DynamicModuleOptions,
+	) => StaticModule<TDef>,
+): DynamicModule<TDef> {
+	return {
+		forRoot(config, options) {
+			return factory(config, options);
+		},
 	};
 }
