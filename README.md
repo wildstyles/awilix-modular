@@ -31,10 +31,16 @@ pnpm add awilix-modular awilix
 
 ## Quick Start
 
-### Create modules with their definitions
+This guide demonstrates building a modular application with `OrderModule` and `UserModule`, showing how modules import each other and share dependencies with full type safety.
+
+### 1. Create modules with their definitions
+
+Define modules with typed providers. Use `exportKeys` to specify which providers are available to importing modules:
 
 ```typescript
+// order.module.ts
 import { createStaticModule, type ModuleDef } from "awilix-modular";
+import { OrderService } from "./order.service";
 
 // Define OrderModule
 type OrderModuleDef = ModuleDef<{
@@ -54,6 +60,12 @@ export const OrderModule = createStaticModule<OrderModuleDef>({
   },
 });
 
+// user.module.ts
+import { createStaticModule, type ModuleDef } from "awilix-modular";
+import { OrderModule } from "../order/order.module";
+import { UserService } from "./user.service";
+import { EmailService } from "./email.service";
+
 // Define UserModule that imports OrderModule
 type UserModuleDef = ModuleDef<{
   providers: {
@@ -62,10 +74,9 @@ type UserModuleDef = ModuleDef<{
   };
   imports: [typeof OrderModule];
 }>;
-
+// Available deps within module
 export type UserModuleDeps = UserModuleDef["deps"];
 
-// Create the module
 export const UserModule = createStaticModule<UserModuleDef>({
   name: "UserModule",
   imports: [OrderModule],
@@ -76,23 +87,24 @@ export const UserModule = createStaticModule<UserModuleDef>({
 });
 ```
 
-### Register DiContext with created module
+### 2. Register DiContext with created modules
 
-Create a DI context and register your module:
+Create a DI context with common dependencies (like logger).
+Use `declare module` to make common dependencies globally available to all modules:
 
 ```typescript
+// app.module.ts
 import { DIContext } from "awilix-modular";
 import { asClass, asValue } from "awilix";
 import { UserModule } from "./user.module";
 
-// Define AppModule that imports UserModule
-type AppModuleDef = ModuleDef<{
-  imports: [typeof UserModule];
-}>;
-
 type CommonDeps = {
   logger: Logger;
 };
+
+type AppModuleDef = ModuleDef<{
+  imports: [typeof UserModule];
+}>;
 
 export const AppModule = createStaticModule<AppModuleDef>({
   name: "AppModule",
@@ -110,17 +122,18 @@ const diContext = new DIContext({
 diContext.registerModule(AppModule);
 
 // Extend CommonDependencies interface to make logger available globally
-// This allows all modules to access logger without explicit imports
 declare module "awilix-modular" {
   interface CommonDependencies extends CommonDeps {}
 }
 ```
 
-### Use ModuleDef deps for provider constructor
+### 3. Type-safe dependency injection in services
 
-The `ModuleDef` automatically extracts dependency types for your constructors:
+Use `ModuleDef['deps']` to get automatic type inference for all available dependencies in your service constructors.  
+This includes module providers, imported module exports, and common dependencies:
 
 ```typescript
+// user.service.ts
 import { UserModuleDeps } from "./user.module.ts";
 
 class UserService {
@@ -131,4 +144,55 @@ class UserService {
     this.deps.logger; // From global root providers
   }
 }
+```
+
+### 4. Use controllers with any framework
+
+Controllers are registered via callbacks, allowing integration with **any HTTP framework** (Express, Fastify, Hono, Koa, etc.).  
+This is especially useful for gradually migrating existing applications to a modular architecture without a full rewrite
+
+```typescript
+// user.controller.ts
+import type { Express, Request, Response } from "express";
+import { UserModuleDeps } from "./user.module.ts";
+
+class UserController {
+  constructor(private readonly deps: UserModuleDeps) {}
+
+  registerRoutes(app: Express) {
+    app.get("/users/:id", async (req: Request, res: Response) => {
+      const user = await this.deps.userService.getUser(req.params.id);
+      res.json(user);
+    });
+  }
+}
+
+// user.module.ts - Add controller to module
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  imports: [OrderModule],
+  providers: {
+    userService: UserService,
+    emailService: EmailService,
+  },
+  controllers: [UserController], // Register controller
+});
+
+// app.ts - Works with any framework (Express example)
+import express, { type Express } from "express";
+
+const app = express();
+const diContext = new DIContext<Express>({
+  rootProviders: {
+    logger: asClass(Logger).singleton(),
+  },
+  // Called for each controller once when modules are registered
+  onController: (ControllerClass, scope) => {
+    const controller = scope.build(ControllerClass); // Resolve with dependencies
+    controller.registerRoutes(app); // Pass your framework instance
+  },
+});
+
+diContext.registerModule(AppModule);
+app.listen(3000);
 ```
