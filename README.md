@@ -4,14 +4,10 @@ A type-safe, modular dependency injection wrapper for [Awilix](https://github.co
 
 ## Features
 
-- **Type-Safe Module System** - Strict TypeScript types with full IntelliSense support
+- **Type-Safe Module System** - Strict TypeScript types. ModuleDef is a single source of truth
 - **HTTP Framework Agnostic** - Works with Express, Fastify, Koa, or any other framework
-- **Automatic Dependency Extraction** - Dependencies are automatically injected based on parameter names
 - **NestJS-Inspired Architecture** - Familiar module, provider, and controller patterns
-- **Modular Design** - Build scalable applications with clear module boundaries
-- **Dynamic Modules** - Configure modules with runtime parameters using `forRoot` pattern
-- **Flexible Provider Types** - Support for classes, factories, primitives, and custom providers
-- **Zero Lock-in** - Built on top of Awilix, use any Awilix features when needed
+- **Less Typing Boilerplate** - Define dependencies once in ModuleDef - reuse in all services
 
 ## Installation
 
@@ -195,4 +191,76 @@ const diContext = new DIContext<Express>({
 
 diContext.registerModule(AppModule);
 app.listen(3000);
+```
+
+## Providers
+
+**Providers are the main building blocks of modules.** They define services, values, and dependencies that can be injected into your application. Each module declares providers that can be used within the module or exported to other modules.
+
+There are four types of providers:
+
+- **Class providers** - Pass a class constructor (most common)
+- **Factory providers** - Custom initialization logic with explicit dependencies
+- **Primitive providers** - Values like strings, numbers, booleans
+- **Class providers with options** - Class with Awilix configuration (lifetime, injector, etc.)
+
+### Factory Providers
+
+Use factory providers when you need custom initialization logic or working with third-party libraries:
+
+```typescript
+// email.module.ts
+type EmailModuleDef = ModuleDef<{
+  providers: {
+    apiKey: string;
+    emailService: EmailService;
+  };
+}>;
+
+export const EmailModule = createStaticModule<EmailModuleDef>({
+  name: "EmailModule",
+  providers: {
+    apiKey: "sendgrid_key_123",
+    emailService: {
+      provide: EmailService,
+      // Declare name of dependencies you want to access in useFactory
+      inject: ["apiKey"],
+      useFactory: (apiKey) => {
+        return new EmailService({ apiKey });
+      },
+    },
+  },
+});
+```
+
+For better type safety, use `createFactoryProvider` which creates a typed helper that provides types for useFactory params:
+
+```typescript
+import { createFactoryProvider } from "awilix-modular";
+
+type NotificationModuleDef = ModuleDef<{
+  providers: {
+    apiKey: string;
+    emailService: EmailService;
+  };
+}>;
+
+// Create typed factory for this module's dependencies
+const factory = createFactoryProvider<NotificationModuleDef["deps"]>();
+
+export const NotificationModule = createStaticModule<NotificationModuleDef>({
+  name: "NotificationModule",
+  providers: {
+    apiKey: "sendgrid_api_key_123",
+
+    emailService: factory({
+      provide: EmailService,
+      inject: ["apiKey"],
+      // each injected dep is fully typed
+      useFactory: (apiKey) => {
+        return new EmailService({ apiKey });
+      },
+    }),
+  },
+});
 ```
