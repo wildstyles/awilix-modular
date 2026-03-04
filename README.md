@@ -204,6 +204,27 @@ There are four types of providers:
 - **Primitive providers** - Values like strings, numbers, booleans
 - **Class providers with options** - Class with Awilix configuration (lifetime, injector, etc.)
 
+### Class Providers
+
+The simplest and most common way to register providers - just pass the class constructor:
+
+```typescript
+type UserModuleDef = ModuleDef<{
+  providers: {
+    userService: UserService;
+    emailService: EmailService;
+  };
+}>;
+
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: {
+    userService: UserService, // Dependencies auto-injected
+    emailService: EmailService,
+  },
+});
+```
+
 ### Factory Providers
 
 Use factory providers when you need custom initialization logic or working with third-party libraries:
@@ -261,6 +282,53 @@ export const NotificationModule = createStaticModule<NotificationModuleDef>({
         return new EmailService({ apiKey });
       },
     }),
+  },
+});
+```
+
+### Primitive Providers
+
+Register simple values like strings, numbers, or booleans directly:
+
+```typescript
+type ConfigModuleDef = ModuleDef<{
+  providers: {
+    apiUrl: string;
+    port: number;
+    isDevelopment: boolean;
+  };
+}>;
+
+export const ConfigModule = createStaticModule<ConfigModuleDef>({
+  name: "ConfigModule",
+  providers: {
+    apiUrl: "https://api.example.com",
+    port: 3000,
+    isDevelopment: process.env.NODE_ENV === "development",
+  },
+});
+```
+
+### Class Providers with Options
+
+Customize Awilix behavior by providing options like `lifetime`:
+
+```typescript
+import { Lifetime } from "awilix";
+
+type CacheModuleDef = ModuleDef<{
+  providers: {
+    cacheService: CacheService;
+  };
+}>;
+
+export const CacheModule = createStaticModule<CacheModuleDef>({
+  name: "CacheModule",
+  providers: {
+    cacheService: {
+      useClass: CacheService,
+      lifetime: Lifetime.SINGLETON,
+    },
   },
 });
 ```
