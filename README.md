@@ -332,3 +332,44 @@ export const CacheModule = createStaticModule<CacheModuleDef>({
   },
 });
 ```
+
+## Dynamic Modules
+
+Dynamic modules accept configuration at runtime using the `forRoot` pattern, allowing you to configure the same module differently in different contexts:
+
+```typescript
+import { createDynamicModule, type ModuleDef } from "awilix-modular";
+
+type DatabaseModuleDef = ModuleDef<{
+  providers: {
+    connectionString: string;
+    databaseService: DatabaseService;
+  };
+  exportKeys: "databaseService";
+  // adding "forRootConfig" makes a module dynamic
+  forRootConfig: { connectionString: string };
+}>;
+
+export const DatabaseModule = createDynamicModule<DatabaseModuleDef>((config) =>
+  createStaticModule({
+    name: "DatabaseModule",
+    providers: {
+      connectionString: config.connectionString,
+      databaseService: DatabaseService,
+    },
+    exports: {
+      databaseService: DatabaseService,
+    },
+  }),
+);
+
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  imports: [
+    // Usage: Configure the module when importing
+    DatabaseModule.forRoot({
+      connectionString: "postgresql://localhost:5432/myapp",
+    }),
+  ],
+});
+```
