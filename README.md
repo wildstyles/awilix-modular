@@ -1,17 +1,37 @@
 # awilix-modular
 
-A type-safe, modular dependency injection wrapper for [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture to any Node.js application.
+[![Build Status](https://github.com/wildstyles/awilix-modular/workflows/ci/badge.svg)](https://github.com/wildstyles/awilix-modular/actions)
+[![codecov](https://codecov.io/gh/wildstyles/awilix-modular/branch/main/graph/badge.svg)](https://codecov.io/gh/wildstyles/awilix-modular)
+
+A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture to any Node.js application.
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [1. Create modules with their definitions](#1-create-modules-with-their-definitions)
+  - [2. Register DiContext with created modules](#2-register-dicontext-with-created-modules)
+  - [3. Type-safe dependency injection in services](#3-type-safe-dependency-injection-in-services)
+  - [4. Use controllers with any framework](#4-use-controllers-with-any-framework)
+- [Providers](#providers)
+  - [Class Providers](#class-providers)
+  - [Factory Providers](#factory-providers)
+  - [Primitive Providers](#primitive-providers)
+  - [Class Providers with DI Options](#class-providers-with-di-options)
+- [Dynamic Modules](#dynamic-modules)
+- [Why awilix-modular?](#why-awilix-modular)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+  - [Philosophy](#philosophy)
 
 ## Features
 
-- **Type-Safe Module System** - Strict TypeScript types with full IntelliSense support
-- **HTTP Framework Agnostic** - Works with Express, Fastify, Koa, or any other framework
-- **Automatic Dependency Extraction** - Dependencies are automatically injected based on parameter names
-- **NestJS-Inspired Architecture** - Familiar module, provider, and controller patterns
-- **Modular Design** - Build scalable applications with clear module boundaries
-- **Dynamic Modules** - Configure modules with runtime parameters using `forRoot` pattern
-- **Flexible Provider Types** - Support for classes, factories, primitives, and custom providers
-- **Zero Lock-in** - Built on top of Awilix, use any Awilix features when needed
+- **Type-Safe Module System** - Complete type safety for each provider in module
+- **HTTP Framework Agnostic** - Works with Express, Fastify, Hono, Koa, or any other framework
+- **NestJS-Inspired Architecture** - Familiar module/controller/provider patterns
+- **Less Typing Boilerplate** - Define module dependencies once - reuse in all providers
+- **Lightweight** - Minimal overhead, built on proven Awilix foundation
 
 ## Installation
 
@@ -154,12 +174,14 @@ This is especially useful for gradually migrating existing applications to a mod
 ```typescript
 // user.controller.ts
 import type { Express, Request, Response } from "express";
+import { Controller } from "awilix-modular";
 import { UserModuleDeps } from "./user.module.ts";
 
-class UserController {
+class UserController implements Controller {
   constructor(private readonly deps: UserModuleDeps) {}
 
   registerRoutes(app: Express) {
+    // Direct framework API - no abstraction layer
     app.get("/users/:id", async (req: Request, res: Response) => {
       const user = await this.deps.userService.getUser(req.params.id);
       res.json(user);
@@ -196,3 +218,318 @@ const diContext = new DIContext<Express>({
 diContext.registerModule(AppModule);
 app.listen(3000);
 ```
+
+## Providers
+
+**Providers are the main building blocks of modules.** They define services, values, and dependencies that can be injected into your application. Each module declares providers that can be used within the module or exported to other modules.
+
+There are four types of providers:
+
+- **Class providers** - Pass a class constructor (most common)
+- **Factory providers** - Custom initialization logic with explicit dependencies
+- **Primitive providers** - Values like strings, numbers, booleans
+- **Class providers with options** - Class with Awilix configuration (lifetime, injector, etc.)
+
+### Class Providers
+
+The simplest and most common way to register providers - just pass the class constructor:
+
+```typescript
+type UserModuleDef = ModuleDef<{
+  providers: {
+    userService: UserService;
+    emailService: EmailService;
+  };
+}>;
+
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: {
+    userService: UserService, // Dependencies auto-injected
+    emailService: EmailService,
+  },
+});
+```
+
+### Factory Providers
+
+Use factory providers when you need custom initialization logic or working with third-party libraries:
+
+```typescript
+// email.module.ts
+type EmailModuleDef = ModuleDef<{
+  providers: {
+    apiKey: string;
+    emailService: EmailService;
+  };
+}>;
+
+export const EmailModule = createStaticModule<EmailModuleDef>({
+  name: "EmailModule",
+  providers: {
+    apiKey: "sendgrid_key_123",
+    emailService: {
+      provide: EmailService,
+      // Declare name of dependencies you want to access in useFactory
+      inject: ["apiKey"],
+      useFactory: (apiKey) => {
+        return new EmailService({ apiKey });
+      },
+    },
+  },
+});
+```
+
+For better type safety, use `createFactoryProvider` which creates a typed helper that provides types for useFactory params:
+
+```typescript
+import { createFactoryProvider } from "awilix-modular";
+
+type NotificationModuleDef = ModuleDef<{
+  providers: {
+    apiKey: string;
+    emailService: EmailService;
+  };
+}>;
+
+// Create typed factory for this module's dependencies
+const factory = createFactoryProvider<NotificationModuleDef["deps"]>();
+
+export const NotificationModule = createStaticModule<NotificationModuleDef>({
+  name: "NotificationModule",
+  providers: {
+    apiKey: "sendgrid_api_key_123",
+
+    emailService: factory({
+      provide: EmailService,
+      inject: ["apiKey"],
+      // each injected dep is fully typed
+      useFactory: (apiKey) => {
+        return new EmailService({ apiKey });
+      },
+    }),
+  },
+});
+```
+
+### Primitive Providers
+
+Register simple values like strings, numbers, or booleans directly:
+
+```typescript
+type ConfigModuleDef = ModuleDef<{
+  providers: {
+    apiUrl: string;
+    port: number;
+    isDevelopment: boolean;
+  };
+}>;
+
+export const ConfigModule = createStaticModule<ConfigModuleDef>({
+  name: "ConfigModule",
+  providers: {
+    apiUrl: "https://api.example.com",
+    port: 3000,
+    isDevelopment: process.env.NODE_ENV === "development",
+  },
+});
+```
+
+### Class Providers with DI Options
+
+Customize Awilix behavior by providing options like `lifetime`:
+
+```typescript
+import { Lifetime } from "awilix";
+
+type CacheModuleDef = ModuleDef<{
+  providers: {
+    cacheService: CacheService;
+  };
+}>;
+
+export const CacheModule = createStaticModule<CacheModuleDef>({
+  name: "CacheModule",
+  providers: {
+    cacheService: {
+      useClass: CacheService,
+      lifetime: Lifetime.SINGLETON,
+    },
+  },
+});
+```
+
+## Dynamic Modules
+
+Dynamic modules accept configuration at runtime using the `forRoot` pattern, allowing you to configure the same module differently in different contexts:
+
+```typescript
+import { createDynamicModule, type ModuleDef } from "awilix-modular";
+
+type DatabaseModuleDef = ModuleDef<{
+  providers: {
+    connectionString: string;
+    databaseService: DatabaseService;
+  };
+  exportKeys: "databaseService";
+  // adding "forRootConfig" makes a module dynamic
+  forRootConfig: { connectionString: string };
+}>;
+
+export const DatabaseModule = createDynamicModule<DatabaseModuleDef>((config) =>
+  createStaticModule({
+    name: "DatabaseModule",
+    providers: {
+      connectionString: config.connectionString,
+      databaseService: DatabaseService,
+    },
+    exports: {
+      databaseService: DatabaseService,
+    },
+  }),
+);
+
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  imports: [
+    // Usage: Configure the module when importing
+    DatabaseModule.forRoot({
+      connectionString: "postgresql://localhost:5432/myapp",
+    }),
+  ],
+});
+```
+
+**Controllers in dynamic module:** When using the same dynamic module multiple times with different configurations, use the `registerControllers` option to control which instance registers controllers:
+
+```typescript
+export const AppModule = createStaticModule<AppModuleDef>({
+  name: "AppModule",
+  imports: [
+    // Primary instance - registers controllers and routes
+    AuthModule.forRoot(
+      { jwtSecret: "user-secret", audience: "users" },
+      { registerControllers: true },
+    ),
+    // Secondary instance - only services, no controllers (avoids duplicate registration error)
+    AuthModule.forRoot({ jwtSecret: "admin-secret", audience: "admins" }),
+  ],
+});
+```
+
+## Why awilix-modular?
+
+### The Problem
+
+In NestJS, every service must declare its dependencies repeatedly in the constructor. As your application grows, you end up writing the same type declarations over and over:
+
+```typescript
+// user.service.ts
+import { Injectable } from "@nestjs/common";
+import { Logger } from "./logger.service";
+import { ConfigService } from "./config.service";
+import { DatabaseService } from "./database.service";
+import { EmailService } from "./email.service";
+import { OrderService } from "./order.service";
+
+@Injectable()
+class UserService {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: ConfigService,
+    private readonly database: DatabaseService,
+    private readonly emailService: EmailService,
+    private readonly orderService: OrderService,
+  ) {}
+}
+
+// payment.service.ts
+import { Injectable } from "@nestjs/common";
+import { Logger } from "./logger.service";
+import { ConfigService } from "./config.service";
+import { DatabaseService } from "./database.service";
+import { OrderService } from "./order.service";
+
+@Injectable()
+class OrderService {
+  constructor(
+    private readonly logger: Logger, // Repeated
+    private readonly config: ConfigService, // Repeated
+    private readonly database: DatabaseService, // Repeated
+    private readonly orderService: OrderService, // Repeated
+  ) {}
+}
+```
+
+> **Every service repeats the same imports and type declarations!**
+
+### The Solution
+
+With awilix-modular, you define your dependencies **once** in `ModuleDef` and reuse the type across all services:
+
+```typescript
+// user.module.ts - Define ALL dependencies once during module creation
+import { createStaticModule, type ModuleDef } from "awilix-modular";
+import { UserService } from "./user.service";
+import { PaymentService } from "./payment.service";
+import { NotificationService } from "./notification.service";
+import { EmailService } from "./email.service";
+import { OrderService } from "./order.service";
+
+// Define ALL provider dependencies in ModuleDef
+type UserModuleDef = ModuleDef<{
+  providers: {
+    userService: UserService;
+    paymentService: PaymentService;
+    notificationService: NotificationService;
+    emailService: EmailService;
+    orderService: OrderService;
+  };
+}>;
+
+// Export the type - services will import this
+export type UserModuleDeps = UserModuleDef["deps"];
+
+// Ensure UserModule implements UserModuleDef and has everything inside container;
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: {
+    userService: UserService,
+    paymentService: PaymentService,
+    notificationService: NotificationService,
+    emailService: EmailService,
+    orderService: OrderService,
+  },
+});
+
+// user.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class UserService {
+  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+}
+
+// payment.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class PaymentService {
+  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+}
+
+// notification.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class NotificationService {
+  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+}
+```
+
+> **Define module provider dependencies once during module definition**
+
+### Philosophy
+
+**Single Source of Truth**: Your `ModuleDef` is the complete definition of what's available in your module. Change it once, and all services are updated.
+
+**Configuration in Module, Not Provider**: DI options(Injectable decorator) are configured at the module level, keeping provider files clean and focused on business logic.
+
+**Less Boilerplate**: No experimental decorators, no reflection, no repeated type declarations. Just clean, maintainable code.
