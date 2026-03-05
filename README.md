@@ -5,12 +5,28 @@
 
 A type-safe, modular dependency injection wrapper for [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture to any Node.js application.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [1. Create modules with their definitions](#1-create-modules-with-their-definitions)
+  - [2. Register DiContext with created modules](#2-register-dicontext-with-created-modules)
+  - [3. Type-safe dependency injection in services](#3-type-safe-dependency-injection-in-services)
+  - [4. Use controllers with any framework](#4-use-controllers-with-any-framework)
+- [Providers](#providers)
+  - [Class Providers](#class-providers)
+  - [Factory Providers](#factory-providers)
+  - [Primitive Providers](#primitive-providers)
+  - [Class Providers with DI Options](#class-providers-with-di-options)
+- [Dynamic Modules](#dynamic-modules)
+
 ## Features
 
-- **Type-Safe Module System** - Strict TypeScript types. ModuleDef is a single source of truth
-- **HTTP Framework Agnostic** - Works with Express, Fastify, Koa, or any other framework
-- **NestJS-Inspired Architecture** - Familiar module, provider, and controller patterns
-- **Less Typing Boilerplate** - Define dependencies once in ModuleDef - reuse in all services
+- **Type-Safe Module System** - Complete type safety for each provider in module
+- **HTTP Framework Agnostic** - Works with Express, Fastify, Hono, Koa, or any other framework
+- **NestJS-Inspired Architecture** - Familiar module/controller/provider patterns
+- **Less Typing Boilerplate** - Define module dependencies once - reuse in all providers
 
 ## Installation
 
@@ -312,7 +328,7 @@ export const ConfigModule = createStaticModule<ConfigModuleDef>({
 });
 ```
 
-### Class Providers with Options
+### Class Providers with DI Options
 
 Customize Awilix behavior by providing options like `lifetime`:
 
