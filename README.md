@@ -20,6 +20,10 @@ A type-safe, modular dependency injection wrapper for [Awilix](https://github.co
   - [Primitive Providers](#primitive-providers)
   - [Class Providers with DI Options](#class-providers-with-di-options)
 - [Dynamic Modules](#dynamic-modules)
+- [Why awilix-modular?](#why-awilix-modular)
+  - [The Problem](#the-problem)
+  - [The Solution](#the-solution)
+  - [Philosophy](#philosophy)
 
 ## Features
 
@@ -27,6 +31,7 @@ A type-safe, modular dependency injection wrapper for [Awilix](https://github.co
 - **HTTP Framework Agnostic** - Works with Express, Fastify, Hono, Koa, or any other framework
 - **NestJS-Inspired Architecture** - Familiar module/controller/provider patterns
 - **Less Typing Boilerplate** - Define module dependencies once - reuse in all providers
+- **Lightweight** - Minimal overhead, built on proven Awilix foundation
 
 ## Installation
 
@@ -169,12 +174,14 @@ This is especially useful for gradually migrating existing applications to a mod
 ```typescript
 // user.controller.ts
 import type { Express, Request, Response } from "express";
+import { Controller } from "awilix-modular";
 import { UserModuleDeps } from "./user.module.ts";
 
-class UserController {
+class UserController implements Controller {
   constructor(private readonly deps: UserModuleDeps) {}
 
   registerRoutes(app: Express) {
+    // Direct framework API - no abstraction layer
     app.get("/users/:id", async (req: Request, res: Response) => {
       const user = await this.deps.userService.getUser(req.params.id);
       res.json(user);
@@ -409,3 +416,120 @@ export const AppModule = createStaticModule<AppModuleDef>({
   ],
 });
 ```
+
+## Why awilix-modular?
+
+### The Problem
+
+In NestJS, every service must declare its dependencies repeatedly in the constructor. As your application grows, you end up writing the same type declarations over and over:
+
+```typescript
+// user.service.ts
+import { Injectable } from "@nestjs/common";
+import { Logger } from "./logger.service";
+import { ConfigService } from "./config.service";
+import { DatabaseService } from "./database.service";
+import { EmailService } from "./email.service";
+import { OrderService } from "./order.service";
+
+@Injectable()
+class UserService {
+  constructor(
+    private readonly logger: Logger,
+    private readonly config: ConfigService,
+    private readonly database: DatabaseService,
+    private readonly emailService: EmailService,
+    private readonly orderService: OrderService,
+  ) {}
+}
+
+// payment.service.ts
+import { Injectable } from "@nestjs/common";
+import { Logger } from "./logger.service";
+import { ConfigService } from "./config.service";
+import { DatabaseService } from "./database.service";
+import { OrderService } from "./order.service";
+
+@Injectable()
+class OrderService {
+  constructor(
+    private readonly logger: Logger, // Repeated
+    private readonly config: ConfigService, // Repeated
+    private readonly database: DatabaseService, // Repeated
+    private readonly orderService: OrderService, // Repeated
+  ) {}
+}
+```
+
+> **Every service repeats the same imports and type declarations!**
+
+### The Solution
+
+With awilix-modular, you define your dependencies **once** in `ModuleDef` and reuse the type across all services:
+
+```typescript
+// user.module.ts - Define ALL dependencies once during module creation
+import { createStaticModule, type ModuleDef } from "awilix-modular";
+import { UserService } from "./user.service";
+import { PaymentService } from "./payment.service";
+import { NotificationService } from "./notification.service";
+import { EmailService } from "./email.service";
+import { OrderService } from "./order.service";
+
+// Define ALL provider dependencies in ModuleDef
+type UserModuleDef = ModuleDef<{
+  providers: {
+    userService: UserService;
+    paymentService: PaymentService;
+    notificationService: NotificationService;
+    emailService: EmailService;
+    orderService: OrderService;
+  };
+}>;
+
+// Export the type - services will import this
+export type UserModuleDeps = UserModuleDef["deps"];
+
+// Ensure UserModule implements UserModuleDef and has everything inside container;
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: {
+    userService: UserService,
+    paymentService: PaymentService,
+    notificationService: NotificationService,
+    emailService: EmailService,
+    orderService: OrderService,
+  },
+});
+
+// user.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class UserService {
+  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+}
+
+// payment.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class PaymentService {
+  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+}
+
+// notification.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class NotificationService {
+  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+}
+```
+
+> **Define module provider dependencies once during module definition**
+
+### Philosophy
+
+**Single Source of Truth**: Your `ModuleDef` is the complete definition of what's available in your module. Change it once, and all services are updated.
+
+**Configuration in Module, Not Provider**: DI options(Injectable decorator) are configured at the module level, keeping provider files clean and focused on business logic.
+
+**Less Boilerplate**: No decorators, no repeated type declarations. Just clean, maintainable code.
