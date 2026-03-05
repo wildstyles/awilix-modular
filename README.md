@@ -1,5 +1,7 @@
 # awilix-modular
 
+[![Build Status](https://github.com/wildstyles/awilix-modular/workflows/ci/badge.svg)](https://github.com/wildstyles/awilix-modular/actions)
+
 A type-safe, modular dependency injection wrapper for [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture to any Node.js application.
 
 ## Features
