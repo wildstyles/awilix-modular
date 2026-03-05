@@ -373,3 +373,20 @@ export const UserModule = createStaticModule<UserModuleDef>({
   ],
 });
 ```
+
+**Controllers in dynamic module:** When using the same dynamic module multiple times with different configurations, use the `registerControllers` option to control which instance registers controllers:
+
+```typescript
+export const AppModule = createStaticModule<AppModuleDef>({
+  name: "AppModule",
+  imports: [
+    // Primary instance - registers controllers and routes
+    AuthModule.forRoot(
+      { jwtSecret: "user-secret", audience: "users" },
+      { registerControllers: true },
+    ),
+    // Secondary instance - only services, no controllers (avoids duplicate registration error)
+    AuthModule.forRoot({ jwtSecret: "admin-secret", audience: "admins" }),
+  ],
+});
+```
