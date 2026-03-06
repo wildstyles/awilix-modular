@@ -373,19 +373,18 @@ describe("createStaticModule", () => {
 		).type.toRaiseError();
 	});
 
-	it("rejects DynamicModuleDef (with forRootConfig)", () => {
+	it("creates StaticModule if DynamicModuleDef passed to createStaticModule", () => {
 		type D1 = D<{
 			providers: { service1: Service1 };
 			forRootConfig: { value: string }; // ❌ Has forRootConfig - this is a DynamicModuleDef
 		}>;
 
-		// Negative: Should reject DynamicModuleDef
 		expect(
 			createStaticModule<D1>({
 				name: "TestModule",
 				providers: { service1: Service1 },
 			}),
-		).type.toRaiseError();
+		).type.not.toHaveProperty("forRootConfig");
 	});
 });
 

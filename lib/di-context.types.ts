@@ -271,9 +271,13 @@ export function createFactoryProvider<DepsMap extends Record<string, any>>() {
 	};
 }
 
+type StripDynamic<T> = T extends { forRootConfig: any }
+	? Omit<T, "forRootConfig">
+	: T;
+
 export function createStaticModule<TDef extends StaticModuleDef>(
-	module: TDef extends DynamicModuleDef ? never : StaticModule<TDef>,
-): StaticModule<TDef> {
+	module: StaticModule<StripDynamic<TDef>>,
+): StaticModule<StripDynamic<TDef>> {
 	return module;
 }
 
