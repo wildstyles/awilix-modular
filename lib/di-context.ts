@@ -79,13 +79,16 @@ export class DIContext<TFramework = unknown> {
 		return this.registerModuleWithScope(
 			module,
 			this.rootContainer.createScope(),
+			[],
 		);
 	}
 
 	private registerModuleWithScope(
 		m: M,
 		scope: AwilixContainer,
+		moduleChain: M[],
 	): ModuleScopeTree {
+		this.ensureNoCircularModuleDependency(m, moduleChain);
 		this.ensureImportedModulesUniqueness(m);
 		this.ensureNoProviderNameConflicts(m);
 
@@ -94,6 +97,7 @@ export class DIContext<TFramework = unknown> {
 				...this.registerModuleWithScope(
 					importedModule,
 					this.rootContainer.createScope(),
+					[...moduleChain, m],
 				),
 				module: importedModule,
 			};
@@ -426,6 +430,13 @@ export class DIContext<TFramework = unknown> {
 
 		if (conflicts.length > 0) {
 			throw new ERRORS.ProviderNameConflictError(m.name, conflicts);
+		}
+	}
+
+	private ensureNoCircularModuleDependency(m: M, moduleChain: M[]) {
+		if (moduleChain.includes(m)) {
+			const chainNames = moduleChain.map((module) => module.name);
+			throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
 		}
 	}
 }

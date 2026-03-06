@@ -76,3 +76,12 @@ export class ProviderNameConflictError extends Error {
 		this.name = "ProviderNameConflictError";
 	}
 }
+
+export class CircularModuleDependencyError extends Error {
+	constructor(moduleName: string, chain: string[]) {
+		super(
+			`Circular module dependency detected: ${chain.join(" -> ")} -> ${moduleName}`,
+		);
+		this.name = "CircularModuleDependencyError";
+	}
+}

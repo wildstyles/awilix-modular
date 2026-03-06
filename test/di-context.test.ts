@@ -144,6 +144,29 @@ describe("DIContext", () => {
 				});
 			}).toThrow(ERRORS.CircularDependencyError);
 		});
+
+		it("should throw an error when modules have circular dependencies", () => {
+			const ModuleA: AnyModule = {
+				name: "ModuleA",
+				imports: [],
+			};
+
+			const ModuleB: AnyModule = {
+				name: "ModuleB",
+				imports: [ModuleA],
+			};
+
+			const ModuleC: AnyModule = {
+				name: "ModuleC",
+				imports: [ModuleB],
+			};
+
+			ModuleA.imports = [ModuleB];
+
+			expect(() => {
+				diContext.registerModule(ModuleC);
+			}).toThrow(ERRORS.CircularModuleDependencyError);
+		});
 	});
 
 	describe("Factory Provider Registration", () => {
