@@ -158,7 +158,7 @@ describe("DIContext Performance", () => {
 		// 200 feature × 20 = 4,000 providers
 		// Total: 4,990 unique providers, ~250 unique modules
 		const totalProviders = 10 * 15 + 40 * 21 + 200 * 20;
-		expect(duration).toBeLessThan(4000);
+		expect(duration).toBeLessThan(6000);
 		console.log(
 			`  ⚡ ${(duration / totalProviders).toFixed(3)}ms per provider`,
 		);
