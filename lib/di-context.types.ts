@@ -157,6 +157,11 @@ type WithForRootConfig = {
 	forRootConfig: UnknownRecord;
 };
 
+type ForwardRef<T extends AnyModule = AnyModule> = {
+	__forward_ref__: true;
+	resolve: () => T;
+};
+
 type StaticModuleDef = {
 	providers?: DefProviderMap;
 	exports?: DefProviderMap;
@@ -194,12 +199,17 @@ type WithExports<Def extends StaticModuleDef> =
 			: { exports: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
 		: { exports?: never };
 
+// Helper type to allow ForwardReference for each module in imports array
+type WithForwardRefImports<T extends readonly AnyModule[]> = {
+	[K in keyof T]: T[K] extends AnyModule ? T[K] | ForwardRef<T[K]> : T[K];
+};
+
 type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
-	? { imports?: StaticModule<any>[] } // Def is 'any' - use loose typing
+	? { imports?: (AnyModule | ForwardRef)[] } // Def is 'any' - use loose typing
 	: Def["imports"] extends AnyModule[]
 		? Def["imports"] extends []
 			? { imports?: [] }
-			: { imports: Def["imports"] }
+			: { imports: WithForwardRefImports<Def["imports"]> }
 		: { imports?: never };
 
 export type AnyModule = StaticModule<any>;
@@ -292,4 +302,24 @@ export function createDynamicModule<TDef extends DynamicModuleDef>(
 			return factory(config, options);
 		},
 	};
+}
+
+export function forwardRef<T extends AnyModule>(
+	getter: () => T,
+): ForwardRef<T> {
+	return {
+		__forward_ref__: true,
+		resolve: getter,
+	};
+}
+
+export function isForwardRef(value: unknown): value is ForwardRef {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"__forward_ref__" in value &&
+		value.__forward_ref__ === true &&
+		"resolve" in value &&
+		typeof value.resolve === "function"
+	);
 }

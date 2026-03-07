@@ -16,6 +16,7 @@ import {
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
+	isForwardRef,
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
@@ -53,6 +54,7 @@ export class DIContext<TFramework = unknown> {
 		ControllerConstructor<TFramework>,
 		M
 	>();
+	private readonly forwardRefModules = new WeakSet<M>();
 	private readonly options: DiContextOptions<TFramework> &
 		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
 		rootProviders: {},
@@ -88,11 +90,43 @@ export class DIContext<TFramework = unknown> {
 		scope: AwilixContainer,
 		moduleChain: M[],
 	): ModuleScopeTree {
-		this.ensureNoCircularModuleDependency(m, moduleChain);
+		// Pre-scan imports: if this module uses forwardRef, mark it before circular check
+		const importsList = m.imports || [];
+		for (const importItem of importsList) {
+			if (isForwardRef(importItem)) {
+				this.forwardRefModules.add(m);
+				// break;
+			}
+		}
+
+		// Check for circular dependency
+		const isCircular = moduleChain.includes(m);
+		if (isCircular) {
+			const hasForwardRefInCycle =
+				this.forwardRefModules.has(m) ||
+				moduleChain.some((module) => this.forwardRefModules.has(module));
+
+			if (!hasForwardRefInCycle) {
+				const chainNames = moduleChain.map((module) => module.name);
+				throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
+			}
+
+			// Circular but allowed via forwardRef - return empty scope to break recursion
+			return {
+				name: m.name,
+				scope,
+				importedScopes: new Map(),
+			};
+		}
+
 		this.ensureImportedModulesUniqueness(m);
 		this.ensureNoProviderNameConflicts(m);
 
-		const importedModulesWithScope = (m.imports || []).map((importedModule) => {
+		const importedModulesWithScope = importsList.map((importItem) => {
+			const importedModule = isForwardRef(importItem)
+				? importItem.resolve()
+				: importItem;
+
 			return {
 				...this.registerModuleWithScope(
 					importedModule,
@@ -336,9 +370,12 @@ export class DIContext<TFramework = unknown> {
 
 	private buildDepGraph(m: M, depsGraph: ProdiderDepsGraph): ProdiderDepsGraph {
 		const importedProviderKeys = new Set(
-			(m.imports || []).flatMap((importedModule) =>
-				Object.keys(importedModule.exports || {}),
-			),
+			(m.imports || []).flatMap((importItem) => {
+				const importedModule = isForwardRef(importItem)
+					? importItem.resolve()
+					: importItem;
+				return Object.keys(importedModule.exports || {});
+			}),
 		);
 
 		return Object.entries(m.providers || {}).reduce<ProdiderDepsGraph>(
@@ -409,7 +446,11 @@ export class DIContext<TFramework = unknown> {
 	private ensureImportedModulesUniqueness(m: M) {
 		const importedNames = new Set<string>();
 
-		for (const imported of m.imports || []) {
+		for (const importItem of m.imports || []) {
+			const imported = isForwardRef(importItem)
+				? importItem.resolve()
+				: importItem;
+
 			if (importedNames.has(imported.name)) {
 				throw new ERRORS.DuplicateModuleImportError(m.name, imported.name);
 			}
@@ -420,9 +461,12 @@ export class DIContext<TFramework = unknown> {
 
 	private ensureNoProviderNameConflicts(m: M) {
 		const moduleProviderKeys = Object.keys(m.providers || {});
-		const importedProviderKeys = (m.imports || []).flatMap((importedModule) =>
-			Object.keys(importedModule.exports || {}),
-		);
+		const importedProviderKeys = (m.imports || []).flatMap((importItem) => {
+			const importedModule = isForwardRef(importItem)
+				? importItem.resolve()
+				: importItem;
+			return Object.keys(importedModule.exports || {});
+		});
 
 		const conflicts = importedProviderKeys.filter((key) =>
 			moduleProviderKeys.includes(key),
@@ -430,13 +474,6 @@ export class DIContext<TFramework = unknown> {
 
 		if (conflicts.length > 0) {
 			throw new ERRORS.ProviderNameConflictError(m.name, conflicts);
-		}
-	}
-
-	private ensureNoCircularModuleDependency(m: M, moduleChain: M[]) {
-		if (moduleChain.includes(m)) {
-			const chainNames = moduleChain.map((module) => module.name);
-			throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
 		}
 	}
 }

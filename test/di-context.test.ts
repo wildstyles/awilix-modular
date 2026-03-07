@@ -17,6 +17,7 @@ import type {
 import {
 	createDynamicModule,
 	createStaticModule,
+	forwardRef,
 } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
@@ -28,7 +29,7 @@ describe("DIContext", () => {
 	}
 
 	class TestableBase {
-		constructor(private deps?: any) {}
+		constructor(protected deps?: any) {}
 
 		getDeps() {
 			return this.deps;
@@ -57,9 +58,9 @@ describe("DIContext", () => {
 		});
 	});
 
-	function registerModule(
+	function registerModule<Extends>(
 		module: Partial<AnyModule>,
-	): ModuleScopeTree<AwilixContainer<{ [k: string]: TestableBase }>> {
+	): ModuleScopeTree<AwilixContainer<{ [k: string]: TestableBase & Extends }>> {
 		return diContext.registerModule({
 			name: "AnyModule",
 			...module,
@@ -166,6 +167,80 @@ describe("DIContext", () => {
 			expect(() => {
 				diContext.registerModule(ModuleC);
 			}).toThrow(ERRORS.CircularModuleDependencyError);
+		});
+
+		it("should allow circular dependencies with forwardRef", () => {
+			interface Circrular {
+				call(): void;
+				onCall(): string;
+			}
+			class ServiceA extends TestableBase implements Circrular {
+				call() {
+					return this.deps.serviceB.onCall();
+				}
+				onCall() {
+					return "Service A called";
+				}
+			}
+			class ServiceB extends TestableBase implements Circrular {
+				call() {
+					return this.deps.serviceA.onCall();
+				}
+				onCall() {
+					return "Service B called";
+				}
+			}
+
+			type ModuleADef = ModuleDef<{
+				providers: {
+					serviceA: ServiceA;
+				};
+				imports: [typeof ModuleB];
+				exportKeys: "serviceA";
+			}>;
+
+			type ModuleBDef = ModuleDef<{
+				providers: {
+					serviceB: ServiceB;
+				};
+				exportKeys: "serviceB";
+				imports: [typeof ModuleA];
+			}>;
+			// ModuleA imports ModuleB via forwardRef, ModuleB imports ModuleA directly
+			const ModuleA = createStaticModule<ModuleADef>({
+				name: "ModuleA",
+				// imports: [forwardRef(() => ModuleB)],
+
+				providers: {
+					serviceA: ServiceA,
+				},
+				exports: {
+					serviceA: ServiceA,
+				},
+			});
+
+			const ModuleB = createStaticModule<ModuleBDef>({
+				name: "ModuleB",
+				imports: [forwardRef(() => ModuleA)],
+				providers: {
+					serviceB: ServiceB,
+				},
+				exports: {
+					serviceB: ServiceB,
+				},
+			});
+
+			ModuleA.imports = [ModuleB];
+
+			// Should not throw with forwardRef
+			const { scope, importedScopes } = registerModule<Circrular>(ModuleA);
+
+			const serviceA = scope.resolve("serviceA");
+			const serviceB: ServiceB | undefined = importedScopes
+				.get("ModuleB")
+				?.scope.resolve("serviceB");
+			expect(serviceA?.call()).toBe("Service B called");
+			expect(serviceB?.call()).toBe("Service A called");
 		});
 	});
 
