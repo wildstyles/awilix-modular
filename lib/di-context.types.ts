@@ -96,14 +96,24 @@ type ResolveExports<
 		: EmptyObject
 	: EmptyObject;
 
-type ResolveImports<D extends { imports?: readonly AnyModule[] }> =
-	D["imports"] extends readonly AnyModule[] ? D["imports"] : [];
+// ModuleImport allows both full modules and module references in imports
+type ModuleImport = AnyModule | AnyModuleRef;
+
+type ResolveImports<D extends { imports?: readonly ModuleImport[] }> =
+	D["imports"] extends readonly ModuleImport[] ? D["imports"] : [];
 
 type ExtractModuleDefFromModule<T> =
-	T extends StaticModule<infer TDef extends StaticModuleDef> ? TDef : never;
+	T extends StaticModule<infer TDef extends StaticModuleDef>
+		? TDef
+		: T extends { exports: infer E }
+			? { exports: E }
+			: never;
 
-type ExtractExportsFromImports<T extends readonly AnyModule[]> =
-	T extends readonly [infer First, ...infer Rest extends readonly AnyModule[]]
+type ExtractExportsFromImports<T extends readonly ModuleImport[]> =
+	T extends readonly [
+		infer First,
+		...infer Rest extends readonly ModuleImport[],
+	]
 		? ExtractModuleDefFromModule<First> extends { exports: infer E }
 			? E & ExtractExportsFromImports<Rest>
 			: ExtractExportsFromImports<Rest>
@@ -112,10 +122,10 @@ type ExtractExportsFromImports<T extends readonly AnyModule[]> =
 type ResolveDeps<
 	D extends {
 		providers?: DefProviderMap;
-		imports?: readonly AnyModule[];
+		imports?: readonly ModuleImport[];
 	},
 > = ResolveProviders<D> &
-	(D["imports"] extends readonly AnyModule[]
+	(D["imports"] extends readonly ModuleImport[]
 		? ExtractExportsFromImports<D["imports"]>
 		: DefProviderMap) &
 	CommonDependencies;
@@ -131,7 +141,7 @@ export type ModuleDef<
 		exportKeys?: D["providers"] extends DefProviderMap
 			? keyof D["providers"]
 			: never;
-		imports?: readonly AnyModule[];
+		imports?: readonly ModuleImport[];
 		forRootConfig?: UnknownRecord;
 	},
 > = {
@@ -157,15 +167,22 @@ type WithForRootConfig = {
 	forRootConfig: UnknownRecord;
 };
 
-type ForwardRef<T extends AnyModule = AnyModule> = {
+export type ForwardRef<T extends AnyModule = AnyModule> = {
 	__forward_ref__: true;
 	resolve: () => T;
+};
+
+declare const moduleRefMarker: unique symbol;
+
+export type ModuleRef<T extends ModuleDef<any>> = {
+	[moduleRefMarker]: true; // Unique marker to distinguish from StaticModule
+	exports: T["exports"];
 };
 
 type StaticModuleDef = {
 	providers?: DefProviderMap;
 	exports?: DefProviderMap;
-	imports?: AnyModule[];
+	imports?: ModuleImport[];
 };
 type DynamicModuleDef = StaticModuleDef & WithForRootConfig;
 
@@ -199,20 +216,37 @@ type WithExports<Def extends StaticModuleDef> =
 			: { exports: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
 		: { exports?: never };
 
+// Type constraint for modules passed to forwardRef when using ModuleRef
+type ForwardRefModule<MDef> = MDef extends {
+	exports: infer E extends DefProviderMap;
+	providers: infer P extends DefProviderMap;
+}
+	? {
+			name: string;
+			exports: ToModuleProviderMap<E, any>;
+			providers: ToModuleProviderMap<P, any>;
+		}
+	: AnyModule;
+
 // Helper type to allow ForwardReference for each module in imports array
-type WithForwardRefImports<T extends readonly AnyModule[]> = {
-	[K in keyof T]: T[K] extends AnyModule ? T[K] | ForwardRef<T[K]> : T[K];
+type WithForwardRefImports<T extends readonly ModuleImport[]> = {
+	[K in keyof T]: T[K] extends ModuleRef<infer MDef>
+		? ForwardRef<ForwardRefModule<MDef>> // ModuleRef MUST use forwardRef with matching structure
+		: T[K] extends StaticModule<any>
+			? T[K] // typeof Module - plain module only (no forwardRef)
+			: T[K];
 };
 
 type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
 	? { imports?: (AnyModule | ForwardRef)[] } // Def is 'any' - use loose typing
-	: Def["imports"] extends AnyModule[]
+	: Def["imports"] extends ModuleImport[]
 		? Def["imports"] extends []
 			? { imports?: [] }
 			: { imports: WithForwardRefImports<Def["imports"]> }
 		: { imports?: never };
 
 export type AnyModule = StaticModule<any>;
+type AnyModuleRef = ModuleRef<any>;
 
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;

@@ -17,7 +17,9 @@ import type {
 import {
 	createDynamicModule,
 	createStaticModule,
+	type ForwardRef,
 	forwardRef,
+	type ModuleRef,
 } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
@@ -195,33 +197,34 @@ describe("DIContext", () => {
 				providers: {
 					serviceA: ServiceA;
 				};
-				imports: [typeof ModuleB];
+				imports: [ModuleRef<ModuleBDef>];
 				exportKeys: "serviceA";
 			}>;
+
+			const ModuleA = createStaticModule<ModuleADef>({
+				name: "ModuleA",
+				// import of actual ModuleB into ModuleA is bellow
+				imports: [] as unknown as [ForwardRef<any>],
+				providers: {
+					serviceA: ServiceA,
+				},
+				exports: {
+					serviceA: ServiceA,
+				},
+			});
 
 			type ModuleBDef = ModuleDef<{
 				providers: {
 					serviceB: ServiceB;
 				};
 				exportKeys: "serviceB";
+				// ModuleA imports ModuleB via forwardRef, ModuleB imports ModuleA directly
 				imports: [typeof ModuleA];
 			}>;
-			// ModuleA imports ModuleB via forwardRef, ModuleB imports ModuleA directly
-			const ModuleA = createStaticModule<ModuleADef>({
-				name: "ModuleA",
-				// imports: [forwardRef(() => ModuleB)],
-
-				providers: {
-					serviceA: ServiceA,
-				},
-				exports: {
-					serviceA: ServiceA,
-				},
-			});
 
 			const ModuleB = createStaticModule<ModuleBDef>({
 				name: "ModuleB",
-				imports: [forwardRef(() => ModuleA)],
+				imports: [ModuleA],
 				providers: {
 					serviceB: ServiceB,
 				},
@@ -230,7 +233,7 @@ describe("DIContext", () => {
 				},
 			});
 
-			ModuleA.imports = [ModuleB];
+			ModuleA.imports = [forwardRef(() => ModuleB)];
 
 			// Should not throw with forwardRef
 			const { scope, importedScopes } = registerModule<Circrular>(ModuleA);
