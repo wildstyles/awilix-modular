@@ -1,0 +1,22 @@
+{
+	"name": "awilix-modular-fastify-cqrs-example",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "tsx watch src/main.ts",
+		"start": "tsx src/main.ts"
+	},
+	"dependencies": {
+		"@fastify/type-provider-typebox": "^5.0.0",
+		"@sinclair/typebox": "^0.34.15",
+		"awilix": "^10.0.2",
+		"awilix-modular": "file:../..",
+		"fastify": "^5.2.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2"
+	}
+}
