@@ -251,6 +251,7 @@ type AnyModuleRef = ModuleRef<any>;
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
 	queryHandlers?: HandlerConstructor[];
+	commandHandlers?: HandlerConstructor[];
 	controllers?: ControllerConstructor<any>[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &

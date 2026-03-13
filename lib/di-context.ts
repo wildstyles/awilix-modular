@@ -27,7 +27,11 @@ type ProdiderDepsGraph = {
 };
 
 interface DiContextOptions<TFramework = unknown> {
-	onHandler?: (
+	onQueryHandler?: (
+		HandlerClass: HandlerConstructor,
+		scope: AwilixContainer,
+	) => void;
+	onCommandHandler?: (
 		HandlerClass: HandlerConstructor,
 		scope: AwilixContainer,
 	) => void;
@@ -283,6 +287,7 @@ export class DIContext<TFramework = unknown> {
 		);
 
 		this.processQueryHandlers(m, scope);
+		this.processCommandHandlers(m, scope);
 		this.processControllers(m, scope);
 
 		const importedScopes = importedModulesWithScope.reduce<
@@ -297,10 +302,18 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private processQueryHandlers(m: M, scope: AwilixContainer) {
-		if (!this.options.onHandler || !m.queryHandlers?.length) return;
+		if (!this.options.onQueryHandler || !m.queryHandlers?.length) return;
 
 		for (const HandlerClass of m.queryHandlers) {
-			this.options.onHandler(HandlerClass, scope);
+			this.options.onQueryHandler(HandlerClass, scope);
+		}
+	}
+
+	private processCommandHandlers(m: M, scope: AwilixContainer) {
+		if (!this.options.onCommandHandler || !m.commandHandlers?.length) return;
+
+		for (const HandlerClass of m.commandHandlers) {
+			this.options.onCommandHandler(HandlerClass, scope);
 		}
 	}
 

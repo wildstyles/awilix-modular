@@ -17,12 +17,15 @@ async function bootstrap() {
 	fastify.decorate("commandBus", commandBusInstance);
 
 	const diContext = new DIContext<FastifyInstance>({
+		containerOptions: {
+			strict: true,
+		},
 		onController: (ControllerClass, scope) => {
 			const controller = scope.build(ControllerClass);
 
 			controller.registerRoutes(fastify);
 		},
-		onHandler: (HandlerClass, scope) => {
+		onQueryHandler: (HandlerClass, scope) => {
 			const handler = scope.build(HandlerClass);
 
 			fastify.queryBus.register(handler.key, handler.executor.bind(handler));
