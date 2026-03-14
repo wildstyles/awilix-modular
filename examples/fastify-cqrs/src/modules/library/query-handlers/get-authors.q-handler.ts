@@ -17,16 +17,18 @@ export class GetAuthorsQueryHandler
 	readonly key = QUERY_KEY;
 	static contract: Contract<typeof QUERY_KEY, Payload, Response>;
 
-	constructor(private readonly deps: Deps) {
-		console.log(Object.keys(deps));
-		console.log("HANDLER");
+	constructor(private readonly getAuthorsService: Deps["getAuthorsService"]) {
+		console.log(
+			"[GetAuthorsQueryHandler] Created with getAuthorsService:",
+			!!getAuthorsService,
+		);
 	}
 
 	async executor(payload: Payload): Promise<Response> {
 		console.log(payload.genre, "payload");
 		const authors = libraryData.authors.map((author) => ({
 			...author,
-			bookCount: this.deps.getAuthorsService.getAuthorBookCount(author.id),
+			bookCount: this.getAuthorsService.getAuthorBookCount(author.id),
 		}));
 
 		return { authors };

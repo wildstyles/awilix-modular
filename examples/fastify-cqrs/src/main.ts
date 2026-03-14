@@ -19,6 +19,7 @@ async function bootstrap() {
 	const diContext = new DIContext<FastifyInstance>({
 		containerOptions: {
 			strict: true,
+			injectionMode: "CLASSIC",
 		},
 		onController: (ControllerClass, scope) => {
 			const controller = scope.build(ControllerClass);

@@ -7,6 +7,9 @@ const BookSchema = Type.Object({
 	authorName: Type.String(),
 	publishedYear: Type.Number(),
 	genre: Type.String(),
+	available: Type.Boolean(),
+	availableCopies: Type.Number(),
+	totalCopies: Type.Number(),
 });
 
 export const GetBooksQuerySchema = Type.Object({
