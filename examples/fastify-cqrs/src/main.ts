@@ -1,11 +1,11 @@
 import { type Bus, DIContext, initializeBus } from "awilix-modular";
 
-import { buildApp, type FastifyInstance } from "./app.js";
+import { buildApp, type FastifyInstance } from "@/app.js";
 import {
 	AppModule,
 	type CommandContracts,
 	type QueryContracts,
-} from "./modules";
+} from "@/modules/index.js";
 
 async function bootstrap() {
 	const fastify = buildApp();

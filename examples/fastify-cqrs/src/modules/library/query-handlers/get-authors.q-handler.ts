@@ -1,4 +1,5 @@
 import type { Contract, Handler } from "awilix-modular";
+
 import type {
 	GetAuthorsQuery as Payload,
 	GetAuthorsResponse as Response,

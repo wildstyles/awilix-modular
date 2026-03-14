@@ -3,11 +3,11 @@ import {
 	createStaticModule,
 	type ModuleDef,
 } from "awilix-modular";
-import type { FastifyInstance } from "../app.js";
+import type { FastifyInstance } from "@/app.js";
 import {
 	LibraryModule,
 	type LibraryModuleQueryContracts,
-} from "./library/library.module.js";
+} from "@/modules/library/library.module.js";
 
 export type QueryContracts = LibraryModuleQueryContracts;
 

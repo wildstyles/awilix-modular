@@ -1,5 +1,5 @@
-import type { FastifyInstance } from "../../../app.ts";
-import type { Controller } from "../../index.js";
+import type { FastifyInstance } from "@/app.js";
+import type { Controller } from "@/modules/index.js";
 
 import {
 	GetBooksQuerySchema,
