@@ -1,11 +1,10 @@
 import type { Contract, Handler } from "awilix-modular";
-
-import libraryData from "../library.data.json" with { type: "json" };
-import type { Deps } from "../library.module.js";
 import type {
 	GetBooksQuery as Payload,
 	GetBooksResponse as Response,
 } from "../dtos/get-books.dto.js";
+import libraryData from "../library.data.json" with { type: "json" };
+import type { Deps } from "../library.module.js";
 
 export const QUERY_KEY = "library/get-books";
 

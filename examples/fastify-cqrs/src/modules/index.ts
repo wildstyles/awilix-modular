@@ -1,9 +1,9 @@
 import {
-	Controller as BaseController,
+	type Controller as BaseController,
 	createStaticModule,
 	type ModuleDef,
 } from "awilix-modular";
-import { FastifyInstance } from "../app.js";
+import type { FastifyInstance } from "../app.js";
 import {
 	LibraryModule,
 	type LibraryModuleQueryContracts,

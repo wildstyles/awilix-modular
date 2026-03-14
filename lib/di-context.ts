@@ -9,10 +9,10 @@ import {
 	Lifetime,
 	type Resolver,
 } from "awilix";
+import type { Handler } from "./cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
 	type ControllerConstructor,
-	type HandlerConstructor,
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
@@ -27,14 +27,8 @@ type ProdiderDepsGraph = {
 };
 
 interface DiContextOptions<TFramework = unknown> {
-	onQueryHandler?: (
-		HandlerClass: HandlerConstructor,
-		scope: AwilixContainer,
-	) => void;
-	onCommandHandler?: (
-		HandlerClass: HandlerConstructor,
-		scope: AwilixContainer,
-	) => void;
+	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
+	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onController?: (
 		ControllerClass: ControllerConstructor<TFramework>,
 		scope: AwilixContainer,
@@ -199,6 +193,7 @@ export class DIContext<TFramework = unknown> {
 
 							return {
 								key,
+								// TODO: wrap with asClass?
 								provider: useClass,
 								scope: importedScope,
 								options: {
@@ -305,7 +300,13 @@ export class DIContext<TFramework = unknown> {
 		if (!this.options.onQueryHandler || !m.queryHandlers?.length) return;
 
 		for (const HandlerClass of m.queryHandlers) {
-			this.options.onQueryHandler(HandlerClass, scope);
+			const handlerSymbol = Symbol(`q-handler_${HandlerClass.name}`);
+
+			scope.register({
+				[handlerSymbol]: asClass(HandlerClass, this.options.providerOptions),
+			});
+
+			this.options.onQueryHandler(() => scope.resolve(handlerSymbol));
 		}
 	}
 
@@ -313,7 +314,13 @@ export class DIContext<TFramework = unknown> {
 		if (!this.options.onCommandHandler || !m.commandHandlers?.length) return;
 
 		for (const HandlerClass of m.commandHandlers) {
-			this.options.onCommandHandler(HandlerClass, scope);
+			const handlerSymbol = Symbol(`c-handler_${HandlerClass.name}`);
+
+			scope.register({
+				[handlerSymbol]: asClass(HandlerClass, this.options.providerOptions),
+			});
+
+			this.options.onCommandHandler(() => scope.resolve(handlerSymbol));
 		}
 	}
 

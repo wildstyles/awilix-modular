@@ -1,10 +1,10 @@
-import { DIContext, initializeBus, type Bus } from "awilix-modular";
+import { type Bus, DIContext, initializeBus } from "awilix-modular";
 
 import { buildApp, type FastifyInstance } from "./app.js";
 import {
 	AppModule,
-	type QueryContracts,
 	type CommandContracts,
+	type QueryContracts,
 } from "./modules";
 
 async function bootstrap() {
@@ -25,10 +25,12 @@ async function bootstrap() {
 
 			controller.registerRoutes(fastify);
 		},
-		onQueryHandler: (HandlerClass, scope) => {
-			const handler = scope.build(HandlerClass);
+		onQueryHandler: (resolveHandler) => {
+			const { key } = resolveHandler();
 
-			fastify.queryBus.register(handler.key, handler.executor.bind(handler));
+			fastify.queryBus.register(key, (...args) => {
+				return resolveHandler().executor(...args);
+			});
 		},
 	});
 

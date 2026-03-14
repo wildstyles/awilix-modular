@@ -7,7 +7,9 @@ const AuthorSchema = Type.Object({
 	bookCount: Type.Number(),
 });
 
-export const GetAuthorsQuerySchema = Type.Object({});
+export const GetAuthorsQuerySchema = Type.Object({
+	genre: Type.String(),
+});
 
 export const GetAuthorsResponseSchema = Type.Object({
 	authors: Type.Array(AuthorSchema),
