@@ -1,12 +1,21 @@
-import { Injectable, Scope } from "@nestjs/common";
+import { Injectable, forwardRef, Inject } from "@nestjs/common";
 
-@Injectable({ scope: Scope.REQUEST }) // Test REQUEST scope
+import { ForwardRef } from "@/app.module.js";
+
+import { CatsService } from "./cats.service.js";
+
+@Injectable()
 export class DogsService {
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
-	constructor() {
-		console.log(`[DogsService] Created instance: ${this.instanceId}`);
-	}
+	constructor(
+    // NOTE: circular deps between providers within one module require
+    // to have Inject with forwardRef at least on one side
+		@Inject(forwardRef(() => CatsService))
+    // NOTE: to break circular deps on type level wrapper type(ForwardRef) is also required:
+    // https://docs.nestjs.com/recipes/swc#common-pitfalls
+		private readonly catsService: ForwardRef<CatsService>,
+	) {}
 
 	getInstanceId(): string {
 		return this.instanceId;
@@ -14,11 +23,5 @@ export class DogsService {
 
 	getAllDogs() {
 		return [{ id: 1, name: "Sharik", breed: "bulldog" }];
-	}
-
-	getDogById(id: number) {
-		const dogs = this.getAllDogs();
-
-		return dogs.find((dog) => dog.id === id);
 	}
 }
