@@ -55,7 +55,7 @@ type FactoryProvider<
 	Keys extends readonly (keyof DepsMap)[],
 	Strict extends boolean = true,
 > = {
-	provide: ClassProvider<T> | ConstructorProvider<T>;
+	provide: Omit<ClassProvider<T>, "allowCircular"> | ConstructorProvider<T>;
 	inject?: Keys;
 	useFactory: Strict extends true
 		? (...args: MapKeysToValues<DepsMap, Keys>) => T
@@ -64,6 +64,7 @@ type FactoryProvider<
 
 type ClassProvider<T extends object> = {
 	useClass: Constructor<T>;
+	allowCircular?: boolean;
 } & BuildResolverOptions<T>;
 
 type ConstructorProvider<T extends object = object> = Constructor<T>;

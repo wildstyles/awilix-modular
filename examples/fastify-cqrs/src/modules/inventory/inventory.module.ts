@@ -6,18 +6,15 @@ import {
 	type ModuleRef,
 } from "awilix-modular";
 
-import { StockRepository } from "./stock.repository.js";
 import { InventoryService } from "./inventory.service.js";
 
 import { LibraryModule, LibraryModuleDef } from "../library/library.module.js";
 
 export type InventoryModuleDef = ModuleDef<{
 	providers: {
-		stockRepository: StockRepository;
 		inventoryService: InventoryService;
 	};
 	exportKeys: "inventoryService";
-	// imports: [typeof LibraryModule]
 	imports: [ModuleRef<LibraryModuleDef>];
 }>;
 
@@ -31,11 +28,15 @@ export const InventoryModule: StaticModule<InventoryModuleDef> =
 		imports: [forwardRef(() => LibraryModule)],
 
 		providers: {
-			stockRepository: StockRepository,
-			inventoryService: InventoryService,
+			inventoryService: {
+				useClass: InventoryService,
+			},
 		},
 
 		exports: {
-			inventoryService: InventoryService,
+			inventoryService: {
+				useClass: InventoryService,
+				// allowCircular: true,
+			},
 		},
 	});

@@ -12,7 +12,7 @@ export const GetAuthorsQuerySchema = Type.Object({
 });
 
 export const GetAuthorsResponseSchema = Type.Object({
-	authors: Type.Array(AuthorSchema),
+	authorCount: Type.Number(),
 });
 
 export type GetAuthorsQuery = Static<typeof GetAuthorsQuerySchema>;

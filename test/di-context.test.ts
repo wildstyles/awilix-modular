@@ -24,6 +24,7 @@ import {
 
 describe("DIContext", () => {
 	let diContext: DIContext;
+	let classicDiContext: DIContext;
 	let onControllerMock: Mock;
 
 	class ControllerBase implements Controller {
@@ -57,6 +58,11 @@ describe("DIContext", () => {
 		diContext = new DIContext({
 			onController: onControllerMock,
 			rootProviders,
+		});
+		classicDiContext = new DIContext({
+			containerOptions: {
+				injectionMode: "CLASSIC",
+			},
 		});
 	});
 
@@ -170,6 +176,8 @@ describe("DIContext", () => {
 				diContext.registerModule(ModuleC);
 			}).toThrow(ERRORS.CircularModuleDependencyError);
 		});
+
+		it("should allow circular dependencies within module if provider is lazy", () => {});
 
 		it("should allow circular dependencies with forwardRef", () => {
 			interface Circrular {

@@ -1,12 +1,22 @@
-import libraryData from "../library.data.json" with { type: "json" };
+import { Deps } from "../library.module.js";
 
 export class GetAuthorsService {
-	constructor() {
-		console.log("[GetAuthorsService] Created (no dependencies)");
+	constructor(
+		private readonly inventoryService: Deps["inventoryService"],
+		private readonly getBooksService: Deps["getBooksService"],
+	) {
+		console.log(this.inventoryService, "int");
+		console.log("AUTHOR initialized");
 	}
 
-	getAuthorBookCount(authorId: string): number {
-		return libraryData.books.filter((book) => book.authorId === authorId)
-			.length;
+	getAuthorCount() {
+		this.getBooksService.addBook();
+		// this.inventoryService.addInventory();
+
+		return 3;
+	}
+
+	addAuthor() {
+		console.log("author added");
 	}
 }

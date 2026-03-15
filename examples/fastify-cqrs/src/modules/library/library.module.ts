@@ -9,6 +9,7 @@ import { GetAuthorsQueryHandler } from "./query-handlers/get-authors.q-handler.j
 import { GetBooksQueryHandler } from "./query-handlers/get-books.q-handler.js";
 
 import { GetAuthorsService } from "./services/get-authors.service.js";
+import { GetBooksService } from "./services/get-books.service.js";
 
 export type LibraryModuleQueryContracts = typeof GetBooksQueryHandler.contract &
 	typeof GetAuthorsQueryHandler.contract;
@@ -16,6 +17,7 @@ export type LibraryModuleQueryContracts = typeof GetBooksQueryHandler.contract &
 export type LibraryModuleDef = ModuleDef<{
 	providers: {
 		getAuthorsService: GetAuthorsService;
+		getBooksService: GetBooksService;
 	};
 	exportKeys: "getAuthorsService";
 	imports: [typeof InventoryModule];
@@ -28,12 +30,25 @@ export const LibraryModule = createStaticModule<LibraryModuleDef>({
 
 	imports: [InventoryModule],
 
+	// providerOptions: {
+	// 	lifetime: "TRANSIENT",
+	// },
+
 	providers: {
-		getAuthorsService: GetAuthorsService,
+		getBooksService: {
+			useClass: GetBooksService,
+		},
+		getAuthorsService: {
+			useClass: GetAuthorsService,
+			allowCircular: true,
+		},
 	},
 
 	exports: {
-		getAuthorsService: GetAuthorsService,
+		getAuthorsService: {
+			allowCircular: true,
+			useClass: GetAuthorsService,
+		},
 	},
 
 	queryHandlers: [GetBooksQueryHandler, GetAuthorsQueryHandler],

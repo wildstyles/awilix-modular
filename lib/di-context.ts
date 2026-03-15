@@ -5,6 +5,7 @@ import {
 	asValue,
 	type BuildResolverOptions,
 	type ContainerOptions,
+	createBuildResolver,
 	createContainer,
 	Lifetime,
 	type Resolver,
@@ -20,6 +21,33 @@ import {
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
+
+// https://github.com/jeffijoe/awilix/pull/133#issuecomment-492989852
+function createProxyResolver(
+	resolver: Resolver<any>,
+	options?: BuildResolverOptions<any>,
+) {
+	return createBuildResolver({
+		...options,
+		resolve(container) {
+			let resolved: any = null;
+
+			return new Proxy(
+				{},
+				{
+					get(_, name) {
+						if (resolved) {
+							return resolved[name];
+						}
+
+						resolved = resolver.resolve(container);
+						return resolved[name];
+					},
+				},
+			);
+		},
+	});
+}
 
 type ProdiderDepsGraph = {
 	graph: Map<string, string[]>;
@@ -156,7 +184,7 @@ export class DIContext<TFramework = unknown> {
 						if (isCostructorProvider(provider)) {
 							return {
 								key,
-								provider,
+								provider: asClass(provider),
 								scope: importedScope,
 								options,
 							};
@@ -189,12 +217,20 @@ export class DIContext<TFramework = unknown> {
 						}
 
 						if (isClassProvider(provider)) {
-							const { useClass, ...awilixOptions } = provider;
+							const { useClass, allowCircular, ...awilixOptions } = provider;
+							const resolver = asClass(useClass, {
+								...options,
+								...awilixOptions,
+							});
 
 							return {
 								key,
-								// TODO: wrap with asClass?
-								provider: useClass,
+								provider: allowCircular
+									? createProxyResolver(resolver, {
+											...options,
+											...awilixOptions,
+										})
+									: resolver,
 								scope: importedScope,
 								options: {
 									...options,
@@ -249,14 +285,18 @@ export class DIContext<TFramework = unknown> {
 				}
 
 				if (isClassProvider(provider)) {
-					const { useClass, ...awilixOptions } = provider;
+					const { useClass, allowCircular, ...awilixOptions } = provider;
+					const options = {
+						...this.options.providerOptions,
+						...m.providerOptions,
+						...awilixOptions,
+					};
+					const resolver = asClass(useClass, options);
 
 					scope.register({
-						[key]: asClass(useClass, {
-							...this.options.providerOptions,
-							...m.providerOptions,
-							...awilixOptions,
-						}),
+						[key]: allowCircular
+							? createProxyResolver(resolver, options)
+							: resolver,
 					});
 
 					return;
@@ -303,7 +343,10 @@ export class DIContext<TFramework = unknown> {
 			const handlerSymbol = Symbol(`q-handler_${HandlerClass.name}`);
 
 			scope.register({
-				[handlerSymbol]: asClass(HandlerClass, this.options.providerOptions),
+				[handlerSymbol]: asClass(HandlerClass, {
+					...this.options.providerOptions,
+					...m.providerOptions,
+				}),
 			});
 
 			this.options.onQueryHandler(() => scope.resolve(handlerSymbol));
@@ -317,7 +360,10 @@ export class DIContext<TFramework = unknown> {
 			const handlerSymbol = Symbol(`c-handler_${HandlerClass.name}`);
 
 			scope.register({
-				[handlerSymbol]: asClass(HandlerClass, this.options.providerOptions),
+				[handlerSymbol]: asClass(HandlerClass, {
+					...this.options.providerOptions,
+					...m.providerOptions,
+				}),
 			});
 
 			this.options.onCommandHandler(() => scope.resolve(handlerSymbol));
