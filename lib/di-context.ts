@@ -18,6 +18,7 @@ import {
 	isCostructorProvider,
 	isFactoryProvider,
 	isForwardRef,
+	isClassHandler,
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
@@ -274,11 +275,15 @@ export class DIContext<TFramework = unknown> {
 
 		for (const HandlerClass of m.queryHandlers) {
 			const handlerSymbol = Symbol(`q-handler_${HandlerClass.name}`);
+			const { useClass, ...awilixOptions } = isClassHandler(HandlerClass)
+				? HandlerClass
+				: { useClass: HandlerClass };
 
 			scope.register({
-				[handlerSymbol]: asClass(HandlerClass, {
+				[handlerSymbol]: asClass(useClass, {
 					...this.options.providerOptions,
 					...m.providerOptions,
+					...awilixOptions,
 				}),
 			});
 
@@ -291,11 +296,15 @@ export class DIContext<TFramework = unknown> {
 
 		for (const HandlerClass of m.commandHandlers) {
 			const handlerSymbol = Symbol(`c-handler_${HandlerClass.name}`);
+			const { useClass, ...awilixOptions } = isClassHandler(HandlerClass)
+				? HandlerClass
+				: { useClass: HandlerClass };
 
 			scope.register({
-				[handlerSymbol]: asClass(HandlerClass, {
+				[handlerSymbol]: asClass(useClass, {
 					...this.options.providerOptions,
 					...m.providerOptions,
+					...awilixOptions,
 				}),
 			});
 

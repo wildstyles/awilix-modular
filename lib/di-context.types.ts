@@ -195,6 +195,10 @@ type ExtractDeps<Def> = Def extends {
 
 export type HandlerConstructor = Constructor<Handler<any, string>>;
 
+type ClassHandler = {
+	useClass: HandlerConstructor;
+} & BuildResolverOptions<any>;
+
 export type ControllerConstructor<TFramework = unknown> = Constructor<
 	Controller<TFramework>
 >;
@@ -251,8 +255,8 @@ type AnyModuleRef = ModuleRef<any>;
 
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
-	queryHandlers?: HandlerConstructor[];
-	commandHandlers?: HandlerConstructor[];
+	queryHandlers?: (ClassHandler | HandlerConstructor)[];
+	commandHandlers?: (ClassHandler | HandlerConstructor)[];
 	controllers?: ControllerConstructor<any>[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &
@@ -274,6 +278,12 @@ export type DynamicModule<TDef extends DynamicModuleDef> = {
 // Narrow type checks
 // ===========================================================================
 //
+
+export function isClassHandler(handler: unknown): handler is ClassHandler {
+	return (
+		typeof handler === "object" && handler !== null && "useClass" in handler
+	);
+}
 
 export function isFactoryProvider<T extends object>(
 	provider: unknown,
