@@ -21,38 +21,7 @@ import {
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
-
-// https://github.com/jeffijoe/awilix/pull/133#issuecomment-492989852
-function createProxyResolver(
-	resolver: Resolver<any>,
-	options?: BuildResolverOptions<any>,
-) {
-	return createBuildResolver({
-		...options,
-		resolve(container) {
-			let resolved: any = null;
-
-			return new Proxy(
-				{},
-				{
-					get(_, name) {
-						if (resolved) {
-							return resolved[name];
-						}
-
-						resolved = resolver.resolve(container);
-						return resolved[name];
-					},
-				},
-			);
-		},
-	});
-}
-
-type ProdiderDepsGraph = {
-	graph: Map<string, string[]>;
-	inDegree: Map<string, number>;
-};
+import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
 interface DiContextOptions<TFramework = unknown> {
 	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
@@ -69,10 +38,8 @@ interface DiContextOptions<TFramework = unknown> {
 export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
 	name: string;
 	scope: S;
-	importedScopes: ImportedScopesMap;
+	importedScopes: Map<string, ModuleScopeTree>;
 }
-
-export type ImportedScopesMap = Map<string, ModuleScopeTree>;
 
 export class DIContext<TFramework = unknown> {
 	private readonly rootContainer: AwilixContainer;
@@ -82,6 +49,7 @@ export class DIContext<TFramework = unknown> {
 	>();
 	private readonly forwardRefModules = new WeakSet<M>();
 	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
+	private readonly sorter = new ProviderDependencySorter();
 	private readonly options: DiContextOptions<TFramework> &
 		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
 		rootProviders: {},
@@ -117,40 +85,23 @@ export class DIContext<TFramework = unknown> {
 		scope: AwilixContainer,
 		moduleChain: M[],
 	): ModuleScopeTree {
-		// Pre-scan imports: if this module uses forwardRef, mark it before circular check
-		const importsList = m.imports || [];
-		for (const importItem of importsList) {
-			if (isForwardRef(importItem)) {
-				this.forwardRefModules.add(m);
-				// break;
-			}
-		}
+		this.ensureImportedModulesUniqueness(m);
+		this.ensureNoProviderNameConflicts(m);
+		this.markModuleIfImportsUseForwardRef(m);
 
-		// Check for circular dependency
 		const isCircular = moduleChain.includes(m);
+
 		if (isCircular) {
-			const hasForwardRefInCycle =
-				this.forwardRefModules.has(m) ||
-				moduleChain.some((module) => this.forwardRefModules.has(module));
-
-			if (!hasForwardRefInCycle) {
-				const chainNames = moduleChain.map((module) => module.name);
-				throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
-			}
-
-			// Circular but allowed via forwardRef - return the existing scope being built
+			this.ensureCircularDependencyHasForwardRef(m, moduleChain);
 			const existingScope = this.moduleScopeMap.get(m);
-			if (existingScope) {
-				return {
-					name: m.name,
-					scope: existingScope,
-					importedScopes: new Map(),
-				};
+
+			if (!existingScope) {
+				throw new ERRORS.ModuleScopeNotFoundError(m.name);
 			}
-			// Fallback to empty scope if not found (shouldn't happen)
+
 			return {
 				name: m.name,
-				scope,
+				scope: existingScope,
 				importedScopes: new Map(),
 			};
 		}
@@ -158,181 +109,47 @@ export class DIContext<TFramework = unknown> {
 		// Store the scope in the map before processing (for circular references)
 		this.moduleScopeMap.set(m, scope);
 
-		this.ensureImportedModulesUniqueness(m);
-		this.ensureNoProviderNameConflicts(m);
-
-		const importedModulesWithScope = importsList.map((importItem) => {
-			const importedModule = isForwardRef(importItem)
-				? importItem.resolve()
-				: importItem;
+		const importedModulesWithScope = (m.imports || []).map((imported) => {
+			const module = isForwardRef(imported) ? imported.resolve() : imported;
 
 			return {
 				...this.registerModuleWithScope(
-					importedModule,
+					module,
 					this.rootContainer.createScope(),
 					[...moduleChain, m],
 				),
-				module: importedModule,
+				module,
 			};
 		});
 
-		const resolvedExportedFromImports = importedModulesWithScope
-			.flatMap(({ module: importedModule, scope: importedScope }) => {
-				return Object.entries(importedModule.exports || {}).map(
+		importedModulesWithScope.forEach(
+			({ module: importedModule, scope: importedScope }) => {
+				Object.entries(importedModule.exports || {}).forEach(
 					([key, provider]) => {
-						const options = {
-							...this.options.providerOptions,
-							...importedModule.providerOptions,
-						};
-
-						if (isPrimitive(provider)) {
-							return {
+						scope.register({
+							[key]: this.resolveProvider({
 								key,
-								scope: null,
 								provider,
-								options,
-							};
-						}
-
-						if (isCostructorProvider(provider)) {
-							return {
-								key,
-								provider: asClass(provider),
-								scope: importedScope,
-								options,
-							};
-						}
-
-						if (isFactoryProvider(provider)) {
-							const { useClass, ...awilixOptions } = isClassProvider(
-								provider.provide,
-							)
-								? provider.provide
-								: {};
-
-							const factoryDeps = (provider.inject || []).map((key) => {
-								if (!importedScope.registrations[key]) {
-									throw new ERRORS.ProviderNotFoundError(key, m.name);
-								}
-
-								return importedScope.registrations[key].resolve(scope);
-							});
-
-							return {
-								key,
-								provider: () => provider.useFactory(...factoryDeps),
-								scope: importedScope,
-								options: {
-									...options,
-									...awilixOptions,
-								},
-							};
-						}
-
-						if (isClassProvider(provider)) {
-							const { useClass, allowCircular, ...awilixOptions } = provider;
-							const resolver = asClass(useClass, {
-								...options,
-								...awilixOptions,
-							});
-
-							return {
-								key,
-								provider: allowCircular
-									? createProxyResolver(resolver, {
-											...options,
-											...awilixOptions,
-										})
-									: resolver,
-								scope: importedScope,
-								allowCircular,
-								options: {
-									...options,
-									...awilixOptions,
-								},
-							};
-						}
-
-						throw new ERRORS.UnsupportedProviderTypeError(
-							key,
-							importedModule.name,
-						);
+								resolutionScope: importedScope,
+								module: importedModule,
+								wrapForExport: true,
+							}),
+						});
 					},
 				);
-			})
-			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
-				// Always build with imported scope to ensure access to sibling providers
-				acc[curr.key] = curr.scope
-					? asFunction(() => curr.scope.build(curr.provider), curr.options)
-					: asValue(curr.provider);
+			},
+		);
 
-				return acc;
-			}, {});
-
-		scope.register(resolvedExportedFromImports);
-
-		Object.entries(this.sortProvidersByDependencies(m)).forEach(
+		Object.entries(this.sorter.sortByDependencies(m)).forEach(
 			([key, provider]) => {
-				if (isFactoryProvider(provider)) {
-					const { useClass, ...awilixOptions } = isClassProvider(
-						provider.provide,
-					)
-						? provider.provide
-						: {};
-
-					const factoryDeps = (provider.inject || []).map((key) => {
-						if (!scope.registrations[key]) {
-							throw new ERRORS.ProviderNotFoundError(key, m.name);
-						}
-
-						return scope.registrations[key].resolve(scope);
-					});
-
-					scope.register({
-						[key]: asFunction(() => provider.useFactory(...factoryDeps), {
-							...this.options.providerOptions,
-							...m.providerOptions,
-							...awilixOptions,
-						}),
-					});
-
-					return;
-				}
-
-				if (isClassProvider(provider)) {
-					const { useClass, allowCircular, ...awilixOptions } = provider;
-					const options = {
-						...this.options.providerOptions,
-						...m.providerOptions,
-						...awilixOptions,
-					};
-					const resolver = asClass(useClass, options);
-
-					scope.register({
-						[key]: allowCircular
-							? createProxyResolver(resolver, options)
-							: resolver,
-					});
-
-					return;
-				}
-
-				if (isCostructorProvider(provider)) {
-					scope.register({
-						[key]: asClass(provider, {
-							...this.options.providerOptions,
-							...m.providerOptions,
-						}),
-					});
-
-					return;
-				}
-
-				if (isPrimitive(provider)) {
-					scope.register({
-						[key]: asValue(provider),
-					});
-				}
+				scope.register({
+					[key]: this.resolveProvider({
+						key,
+						provider,
+						resolutionScope: scope,
+						module: m,
+					}),
+				});
 			},
 		);
 
@@ -340,15 +157,116 @@ export class DIContext<TFramework = unknown> {
 		this.processCommandHandlers(m, scope);
 		this.processControllers(m, scope);
 
-		const importedScopes = importedModulesWithScope.reduce<
-			ModuleScopeTree["importedScopes"]
-		>((acc, { module, ...rest }) => {
-			acc.set(rest.name, rest);
+		return {
+			scope,
+			importedScopes: this.buildImportedScopesMap(importedModulesWithScope),
+			name: m.name,
+		};
+	}
 
-			return acc;
-		}, new Map());
+	private resolveProvider({
+		key,
+		provider,
+		resolutionScope,
+		module,
+		wrapForExport,
+	}: {
+		key: string;
+		// TODO: remove any
+		provider: any;
+		resolutionScope: AwilixContainer;
+		module: M;
+		wrapForExport?: boolean;
+	}): Resolver<any> {
+		const baseOptions = {
+			...this.options.providerOptions,
+			...module.providerOptions,
+		};
 
-		return { scope, importedScopes, name: m.name };
+		if (isPrimitive(provider)) {
+			return asValue(provider);
+		}
+
+		if (isCostructorProvider(provider)) {
+			const resolver = asClass(provider, baseOptions);
+
+			return wrapForExport
+				? asFunction(() => resolver.resolve(resolutionScope), baseOptions)
+				: resolver;
+		}
+
+		if (isFactoryProvider(provider)) {
+			const { useClass, ...awilixOptions } = isClassProvider(provider.provide)
+				? provider.provide
+				: {};
+
+			const factoryDeps = (provider.inject || []).map((k) => {
+				if (!resolutionScope.registrations[k]) {
+					throw new ERRORS.ProviderNotFoundError(key, module.name);
+				}
+
+				return resolutionScope.registrations[k].resolve(resolutionScope);
+			});
+
+			return asFunction(() => provider.useFactory(...factoryDeps), {
+				...baseOptions,
+				...awilixOptions,
+			});
+		}
+
+		if (isClassProvider(provider)) {
+			const { useClass, allowCircular, ...awilixOptions } = provider;
+			const baseResolver = asClass(useClass, {
+				...baseOptions,
+				...awilixOptions,
+			});
+			const resolver = allowCircular
+				? this.createProxyResolver(baseResolver, {
+						...baseOptions,
+						...awilixOptions,
+					})
+				: baseResolver;
+
+			return wrapForExport
+				? asFunction(() => resolutionScope.build(resolver), {
+						...baseOptions,
+						...awilixOptions,
+					})
+				: resolver;
+		}
+
+		throw new ERRORS.UnsupportedProviderTypeError(key, module.name);
+	}
+
+	// https://github.com/jeffijoe/awilix/pull/133#issuecomment-492989852
+	private createProxyResolver(
+		resolver: Resolver<any>,
+		options?: BuildResolverOptions<any>,
+	) {
+		return createBuildResolver({
+			...options,
+			resolve(container) {
+				let resolved: any = null;
+
+				return new Proxy(
+					{},
+					{
+						get(_, name) {
+							if (resolved) {
+								return resolved[name];
+							}
+
+							resolved = resolver.resolve(container);
+							return resolved[name];
+						},
+					},
+				);
+			},
+		});
+	}
+
+	private markModuleIfImportsUseForwardRef(m: M): void {
+		if ((m.imports || []).some(isForwardRef)) this.forwardRefModules.add(m);
 	}
 
 	private processQueryHandlers(m: M, scope: AwilixContainer) {
@@ -414,114 +332,15 @@ export class DIContext<TFramework = unknown> {
 		}
 	}
 
-	private sortProvidersByDependencies(m: M): NonNullable<typeof m.providers> {
-		const depsGraph = this.buildDepGraph(m, this.initializeDepGraph(m));
-		const initialQueue = this.initializeQueue(depsGraph.inDegree);
+	private ensureCircularDependencyHasForwardRef(m: M, moduleChain: M[]): void {
+		const hasForwardRefInCycle =
+			this.forwardRefModules.has(m) ||
+			moduleChain.some((module) => this.forwardRefModules.has(module));
 
-		const sortedKeys = this.sortProviderKeysTopologically(
-			depsGraph,
-			initialQueue,
-		);
+		if (hasForwardRefInCycle) return;
 
-		this.ensureNoCyclicDependencies(m, sortedKeys);
-
-		return sortedKeys.reduce<NonNullable<typeof m.providers>>((acc, key) => {
-			const provider = m.providers?.[key];
-			// Provider might be boolean. That's why not only undefined check
-			if (provider !== undefined) acc[key] = provider;
-
-			return acc;
-		}, {});
-	}
-
-	private initializeDepGraph(m: M): ProdiderDepsGraph {
-		return Object.keys(m.providers || {}).reduce<ProdiderDepsGraph>(
-			(acc, curr) => {
-				acc.graph.set(curr, []);
-				acc.inDegree.set(curr, 0);
-
-				return acc;
-			},
-			{
-				graph: new Map(),
-				inDegree: new Map(),
-			},
-		);
-	}
-
-	private buildDepGraph(m: M, depsGraph: ProdiderDepsGraph): ProdiderDepsGraph {
-		const importedProviderKeys = new Set(
-			(m.imports || []).flatMap((importItem) => {
-				const importedModule = isForwardRef(importItem)
-					? importItem.resolve()
-					: importItem;
-				return Object.keys(importedModule.exports || {});
-			}),
-		);
-
-		return Object.entries(m.providers || {}).reduce<ProdiderDepsGraph>(
-			(acc, [key, provider]) => {
-				if (!isFactoryProvider(provider) || !provider.inject) return acc;
-
-				provider.inject.forEach((dep) => {
-					const depList = acc.graph.get(dep);
-
-					if (depList) {
-						depList.push(key);
-						acc.inDegree.set(key, (acc.inDegree.get(key) || 0) + 1);
-
-						return;
-					}
-
-					if (!depList && !importedProviderKeys.has(dep)) {
-						throw new ERRORS.DependencyNotFoundError(dep, m.name);
-					}
-				});
-
-				return acc;
-			},
-			{ ...depsGraph },
-		);
-	}
-
-	private sortProviderKeysTopologically(
-		depsGraph: ProdiderDepsGraph,
-		queue: string[],
-		result: string[] = [],
-	): string[] {
-		const [current, ...restQueue] = queue;
-
-		if (!current) return result;
-
-		const deps = depsGraph.graph.get(current) || [];
-
-		const inDegree = deps.reduce((acc, curr) => {
-			acc.set(curr, (acc.get(curr) || 0) - 1);
-
-			return acc;
-		}, new Map(depsGraph.inDegree));
-
-		return this.sortProviderKeysTopologically(
-			{ ...depsGraph, inDegree },
-			[...restQueue, ...deps.filter((dep) => inDegree.get(dep) === 0)],
-			[...result, current],
-		);
-	}
-
-	private initializeQueue(inDegree: ProdiderDepsGraph["inDegree"]): string[] {
-		return Array.from(inDegree.entries())
-			.filter(([_, degree]) => degree === 0)
-			.map(([key]) => key);
-	}
-
-	private ensureNoCyclicDependencies(m: M, sortedKeys: string[]) {
-		const providerKeys = Object.keys(m.providers || {});
-
-		if (sortedKeys.length !== providerKeys.length) {
-			const remaining = providerKeys.filter((key) => !sortedKeys.includes(key));
-
-			throw new ERRORS.CircularDependencyError(m.name, remaining);
-		}
+		const chainNames = moduleChain.map((module) => module.name);
+		throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
 	}
 
 	private ensureImportedModulesUniqueness(m: M) {
@@ -556,5 +375,15 @@ export class DIContext<TFramework = unknown> {
 		if (conflicts.length > 0) {
 			throw new ERRORS.ProviderNameConflictError(m.name, conflicts);
 		}
+	}
+
+	private buildImportedScopesMap(
+		importedModulesWithScope: (ModuleScopeTree & { module: M })[],
+	): ModuleScopeTree["importedScopes"] {
+		return importedModulesWithScope.reduce((acc, { module, ...rest }) => {
+			acc.set(rest.name, rest);
+
+			return acc;
+		}, new Map());
 	}
 }

@@ -85,3 +85,13 @@ export class CircularModuleDependencyError extends Error {
 		this.name = "CircularModuleDependencyError";
 	}
 }
+
+export class ModuleScopeNotFoundError extends Error {
+	constructor(moduleName: string) {
+		super(
+			`Module scope not found in map for circular reference: ${moduleName}. ` +
+				`This should not happen - please report this as a bug.`,
+		);
+		this.name = "ModuleScopeNotFoundError";
+	}
+}
