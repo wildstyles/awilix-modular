@@ -2,24 +2,24 @@ import type { FastifyInstance } from "@/app.js";
 import type { Controller } from "@/modules/index.js";
 
 import {
-	GetAuthorsQuerySchema,
-	GetAuthorsResponseSchema,
-} from "../dtos/get-authors.dto.js";
+	GetOwnersQuerySchema,
+	GetOwnersResponseSchema,
+} from "./get-owners.dto.js";
 
-export class GetAuthorsController implements Controller {
+export class GetOwnersController implements Controller {
 	registerRoutes(fastify: FastifyInstance) {
 		fastify.route({
 			method: "GET",
-			url: "/authors",
+			url: "/owners",
 			schema: {
-				querystring: GetAuthorsQuerySchema,
+				querystring: GetOwnersQuerySchema,
 				response: {
-					200: GetAuthorsResponseSchema,
+					200: GetOwnersResponseSchema,
 				},
 			},
 			handler: async (req, res) => {
 				const result = await fastify.queryBus.execute(
-					"library/get-authors",
+					"owners/get-owners",
 					req.query,
 				);
 

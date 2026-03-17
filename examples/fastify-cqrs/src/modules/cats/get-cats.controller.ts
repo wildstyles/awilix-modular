@@ -1,25 +1,22 @@
 import type { FastifyInstance } from "@/app.js";
 import type { Controller } from "@/modules/index.js";
 
-import {
-	GetBooksQuerySchema,
-	GetBooksResponseSchema,
-} from "../dtos/get-books.dto.js";
+import { GetCatsQuerySchema, GetCatsResponseSchema } from "./get-cats.dto.js";
 
-export class GetBooksController implements Controller {
+export class GetCatsController implements Controller {
 	registerRoutes(fastify: FastifyInstance) {
 		fastify.route({
 			method: "GET",
-			url: "/books",
+			url: "/cats",
 			schema: {
-				querystring: GetBooksQuerySchema,
+				querystring: GetCatsQuerySchema,
 				response: {
-					200: GetBooksResponseSchema,
+					200: GetCatsResponseSchema,
 				},
 			},
 			handler: async (req, res) => {
 				const result = await fastify.queryBus.execute(
-					"library/get-books",
+					"cats/get-cats",
 					req.query,
 				);
 

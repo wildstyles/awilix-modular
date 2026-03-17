@@ -5,21 +5,23 @@ import {
 } from "awilix-modular";
 import type { FastifyInstance } from "@/app.js";
 import {
-	LibraryModule,
-	type LibraryModuleQueryContracts,
-} from "@/modules/library/library.module.js";
+	CatsModule,
+	type CatsModuleQueryContracts,
+} from "@/modules/cats/cats.module.js";
+import { type OwnersModuleQueryContracts } from "@/modules/owners/owners.module.js";
 
-export type QueryContracts = LibraryModuleQueryContracts;
+export type QueryContracts = CatsModuleQueryContracts &
+	OwnersModuleQueryContracts;
 
 export type CommandContracts = Record<string, never>;
 
 export interface Controller extends BaseController<FastifyInstance> {}
 
 export type AppModuleDef = ModuleDef<{
-	imports: [typeof LibraryModule];
+	imports: [typeof CatsModule];
 }>;
 
 export const AppModule = createStaticModule<AppModuleDef>({
 	name: "AppModule",
-	imports: [LibraryModule],
+	imports: [CatsModule],
 });
