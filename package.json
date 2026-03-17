@@ -7,6 +7,7 @@
 	"license": "MIT",
 	"scripts": {
 		"build": "tsc",
+		"build:watch": "tsc --watch",
 		"build:release": "del-cli dist && npm run lint && npm run build",
 		"check-types": "tsc --pretty --noEmit",
 		"lint:fix": "biome check --write .",

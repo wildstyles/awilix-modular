@@ -81,6 +81,7 @@ export class DIContext<TFramework = unknown> {
 		M
 	>();
 	private readonly forwardRefModules = new WeakSet<M>();
+	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
 	private readonly options: DiContextOptions<TFramework> &
 		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
 		rootProviders: {},
@@ -137,13 +138,25 @@ export class DIContext<TFramework = unknown> {
 				throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
 			}
 
-			// Circular but allowed via forwardRef - return empty scope to break recursion
+			// Circular but allowed via forwardRef - return the existing scope being built
+			const existingScope = this.moduleScopeMap.get(m);
+			if (existingScope) {
+				return {
+					name: m.name,
+					scope: existingScope,
+					importedScopes: new Map(),
+				};
+			}
+			// Fallback to empty scope if not found (shouldn't happen)
 			return {
 				name: m.name,
 				scope,
 				importedScopes: new Map(),
 			};
 		}
+
+		// Store the scope in the map before processing (for circular references)
+		this.moduleScopeMap.set(m, scope);
 
 		this.ensureImportedModulesUniqueness(m);
 		this.ensureNoProviderNameConflicts(m);
@@ -232,6 +245,7 @@ export class DIContext<TFramework = unknown> {
 										})
 									: resolver,
 								scope: importedScope,
+								allowCircular,
 								options: {
 									...options,
 									...awilixOptions,
@@ -247,6 +261,7 @@ export class DIContext<TFramework = unknown> {
 				);
 			})
 			.reduce<Record<string, Resolver<any>>>((acc, curr) => {
+				// Always build with imported scope to ensure access to sibling providers
 				acc[curr.key] = curr.scope
 					? asFunction(() => curr.scope.build(curr.provider), curr.options)
 					: asValue(curr.provider);
