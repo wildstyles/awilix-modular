@@ -43,7 +43,6 @@ export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
 }
 
 export class DIContext<TFramework = unknown> {
-	private readonly rootContainer: AwilixContainer;
 	private readonly registeredControllers = new WeakMap<
 		ControllerConstructor<TFramework>,
 		M
@@ -68,17 +67,13 @@ export class DIContext<TFramework = unknown> {
 				...options.providerOptions,
 			},
 		};
-
-		this.rootContainer = createContainer(options.containerOptions);
-		this.rootContainer.register(this.options.rootProviders);
 	}
 
 	registerModule(module: M): ModuleScopeTree {
-		return this.registerModuleWithScope(
-			module,
-			this.rootContainer.createScope(),
-			[],
-		);
+		const container = createContainer(this.options.containerOptions);
+		container.register(this.options.rootProviders);
+
+		return this.registerModuleWithScope(module, container, []);
 	}
 
 	private registerModuleWithScope(
@@ -112,13 +107,11 @@ export class DIContext<TFramework = unknown> {
 
 		const importedModulesWithScope = (m.imports || []).map((imported) => {
 			const module = isForwardRef(imported) ? imported.resolve() : imported;
+			const container = createContainer(this.options.containerOptions);
+			container.register(this.options.rootProviders);
 
 			return {
-				...this.registerModuleWithScope(
-					module,
-					this.rootContainer.createScope(),
-					[...moduleChain, m],
-				),
+				...this.registerModuleWithScope(module, container, [...moduleChain, m]),
 				module,
 			};
 		});
