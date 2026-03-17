@@ -7,12 +7,14 @@ import {
 } from "awilix-modular";
 
 import { InventoryService } from "./inventory.service.js";
+import { Inventory1Service } from "./inventory1.service.js";
 
 import { LibraryModule, LibraryModuleDef } from "../library/library.module.js";
 
 export type InventoryModuleDef = ModuleDef<{
 	providers: {
 		inventoryService: InventoryService;
+		inventory1Service: Inventory1Service;
 	};
 	exportKeys: "inventoryService";
 	imports: [ModuleRef<LibraryModuleDef>];
@@ -28,6 +30,9 @@ export const InventoryModule: StaticModule<InventoryModuleDef> =
 		imports: [forwardRef(() => LibraryModule)],
 
 		providers: {
+			inventory1Service: {
+				useClass: Inventory1Service,
+			},
 			inventoryService: {
 				useClass: InventoryService,
 			},
@@ -36,7 +41,7 @@ export const InventoryModule: StaticModule<InventoryModuleDef> =
 		exports: {
 			inventoryService: {
 				useClass: InventoryService,
-				// allowCircular: true,
+				allowCircular: true,
 			},
 		},
 	});

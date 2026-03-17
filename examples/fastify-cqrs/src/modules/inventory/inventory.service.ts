@@ -11,11 +11,24 @@ import type { Deps } from "./inventory.module.js";
 // should be used on both sides
 
 export class InventoryService {
-	constructor(private readonly getAuthorsService: Deps["getAuthorsService"]) {}
+	private readonly instanceId = Math.random().toString(36).substring(7);
+
+	constructor(
+		private readonly getAuthorsService: Deps["getAuthorsService"],
+		private readonly inventory1Service: Deps["inventory1Service"],
+		private readonly getBooksService: Deps["getBooksService"],
+	) {
+		console.log(`InventoryService created with instanceId: ${this.instanceId}`);
+	}
+
+	getInstanceId(): string {
+		return this.instanceId;
+	}
 
 	addInventory() {
+		console.log("3: add inventory");
+		this.inventory1Service.addInventory();
 		this.getAuthorsService.addAuthor();
-
-		console.log("add inventory");
+		this.getBooksService.addBook();
 	}
 }

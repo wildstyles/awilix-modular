@@ -17,9 +17,11 @@ export class GetAuthorsQueryHandler
 	static contract: Contract<typeof QUERY_KEY, Payload, Response>;
 
 	constructor(private readonly getAuthorsService: Deps["getAuthorsService"]) {
+		console.log("INIT?");
+
 		// console.log(
 		// 	"[GetAuthorsQueryHandler] Created with getAuthorsService:",
-		// 	!!getAuthorsService,
+		// 	getAuthorsService.getAuthorCount,
 		// );
 	}
 

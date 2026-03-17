@@ -19,7 +19,8 @@ export type LibraryModuleDef = ModuleDef<{
 		getAuthorsService: GetAuthorsService;
 		getBooksService: GetBooksService;
 	};
-	exportKeys: "getAuthorsService";
+	// exportKeys: "getAuthorsService";
+	exportKeys: "getAuthorsService" | "getBooksService";
 	imports: [typeof InventoryModule];
 }>;
 
@@ -40,17 +41,27 @@ export const LibraryModule = createStaticModule<LibraryModuleDef>({
 		},
 		getAuthorsService: {
 			useClass: GetAuthorsService,
+			// lifetime: "TRANSIENT",
 			allowCircular: true,
 		},
 	},
 
 	exports: {
+		getBooksService: {
+			useClass: GetBooksService,
+		},
 		getAuthorsService: {
 			allowCircular: true,
+			// lifetime: "TRANSIENT",
+
 			useClass: GetAuthorsService,
 		},
 	},
 
-	queryHandlers: [GetBooksQueryHandler, GetAuthorsQueryHandler],
+	queryHandlers: [
+		GetBooksQueryHandler,
+		// GetAuthorsQueryHandler,
+		{ useClass: GetAuthorsQueryHandler, lifetime: "TRANSIENT" },
+	],
 	controllers: [GetBooksController, GetAuthorsController],
 });
