@@ -172,28 +172,21 @@ export class DIContext<TFramework = unknown> {
 		module: M;
 		wrapForExport?: boolean;
 	}): Resolver<any> {
-		const baseOptions = {
-			...this.options.providerOptions,
-			...module.providerOptions,
-		};
-
 		if (isPrimitive(provider)) {
 			return asValue(provider);
 		}
 
+		const resolverOptions = this.extractProviderOptions(module, provider);
+
 		if (isCostructorProvider(provider)) {
-			const resolver = asClass(provider, baseOptions);
+			const resolver = asClass(provider, resolverOptions);
 
 			return wrapForExport
-				? asFunction(() => resolver.resolve(resolutionScope), baseOptions)
+				? asFunction(() => resolver.resolve(resolutionScope), resolverOptions)
 				: resolver;
 		}
 
 		if (isFactoryProvider(provider)) {
-			const { useClass, ...awilixOptions } = isClassProvider(provider.provide)
-				? provider.provide
-				: {};
-
 			const factoryDeps = (provider.inject || []).map((k) => {
 				if (!resolutionScope.registrations[k]) {
 					throw new ERRORS.ProviderNotFoundError(key, module.name);
@@ -202,34 +195,56 @@ export class DIContext<TFramework = unknown> {
 				return resolutionScope.registrations[k].resolve(resolutionScope);
 			});
 
-			return asFunction(() => provider.useFactory(...factoryDeps), {
-				...baseOptions,
-				...awilixOptions,
-			});
+			return asFunction(
+				() => provider.useFactory(...factoryDeps),
+				resolverOptions,
+			);
 		}
 
 		if (isClassProvider(provider)) {
-			const { useClass, allowCircular, ...awilixOptions } = provider;
-			const baseResolver = asClass(useClass, {
-				...baseOptions,
-				...awilixOptions,
-			});
-			const resolver = allowCircular
-				? this.createProxyResolver(baseResolver, {
-						...baseOptions,
-						...awilixOptions,
-					})
+			const baseResolver = asClass(provider.useClass, resolverOptions);
+			const resolver = provider.allowCircular
+				? this.createProxyResolver(baseResolver, resolverOptions)
 				: baseResolver;
 
 			return wrapForExport
-				? asFunction(() => resolutionScope.build(resolver), {
-						...baseOptions,
-						...awilixOptions,
-					})
+				? asFunction(() => resolver.resolve(resolutionScope), resolverOptions)
 				: resolver;
 		}
 
 		throw new ERRORS.UnsupportedProviderTypeError(key, module.name);
+	}
+
+	private extractProviderOptions(
+		module: M,
+		provider: AnyProvider,
+	): BuildResolverOptions<any> {
+		const baseOptions = {
+			...this.options.providerOptions,
+			...module.providerOptions,
+		};
+
+		if (isClassProvider(provider)) {
+			const { useClass, allowCircular, ...providerOptions } = provider;
+
+			return {
+				...baseOptions,
+				...providerOptions,
+			};
+		}
+
+		if (isFactoryProvider(provider)) {
+			const { useClass, ...providerOptions } = isClassProvider(provider.provide)
+				? provider.provide
+				: {};
+
+			return {
+				...baseOptions,
+				...providerOptions,
+			};
+		}
+
+		return baseOptions;
 	}
 
 	// https://github.com/jeffijoe/awilix/pull/133#issuecomment-492989852
