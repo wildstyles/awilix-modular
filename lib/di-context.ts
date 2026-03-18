@@ -205,7 +205,7 @@ export class DIContext<TFramework = unknown> {
 		if (isClassProvider(provider)) {
 			const baseResolver = asClass(provider.useClass, resolverOptions);
 			const resolver = provider.allowCircular
-				? this.createProxyResolver(baseResolver, resolverOptions)
+				? this.createProxyResolver(baseResolver, resolverOptions, wrapForExport)
 				: baseResolver;
 
 			return wrapForExport
@@ -261,7 +261,8 @@ export class DIContext<TFramework = unknown> {
 	// https://github.com/jeffijoe/awilix/pull/133#issuecomment-492989852
 	private createProxyResolver(
 		resolver: Resolver<any>,
-		options?: BuildResolverOptions<any>,
+		options: BuildResolverOptions<any>,
+		wrapForExport?: boolean,
 	) {
 		return createBuildResolver({
 			...options,
@@ -272,11 +273,14 @@ export class DIContext<TFramework = unknown> {
 					{},
 					{
 						get(_, name) {
-							if (resolved) {
-								return resolved[name];
+							if (wrapForExport && options?.lifetime === Lifetime.TRANSIENT) {
+								return resolver.resolve(container)[name];
 							}
 
-							resolved = resolver.resolve(container);
+							if (!resolved) {
+								resolved = resolver.resolve(container);
+							}
+
 							return resolved[name];
 						},
 					},
