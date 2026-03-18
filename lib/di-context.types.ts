@@ -201,7 +201,7 @@ type ExtractDeps<Def> = Def extends {
 
 export type HandlerConstructor = Constructor<Handler<any, string>>;
 
-type ClassHandler = {
+export type ClassHandler = {
 	useClass: HandlerConstructor;
 } & BuildResolverOptions<any>;
 
@@ -256,14 +256,15 @@ type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
 			: { imports: WithForwardRefImports<Def["imports"]> }
 		: { imports?: never };
 
-export type AnyModule = Omit<
-	StaticModule<any>,
-	"providers" | "exports" | "imports"
-> & {
-	providers?: Record<string, AnyProvider>;
-	exports?: Record<string, AnyProvider>;
-	imports?: (AnyModule | ForwardRef)[];
-};
+// export type AnyModule = Omit<
+// 	StaticModule<any>,
+// 	"providers" | "exports" | "imports"
+// > & {
+// 	providers?: Record<string, AnyProvider>;
+// 	exports?: Record<string, AnyProvider>;
+// 	imports?: (AnyModule | ForwardRef)[];
+// };
+export type AnyModule = StaticModule<any>;
 type AnyModuleRef = ModuleRef<any>;
 
 export type StaticModule<Def extends StaticModuleDef> = {

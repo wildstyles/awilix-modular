@@ -14,6 +14,7 @@ import type { Handler } from "./cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
 	type AnyProvider,
+	type ClassHandler,
 	type ControllerConstructor,
 	isClassHandler,
 	isClassProvider,
@@ -56,7 +57,7 @@ export class DIContext<TFramework = unknown> {
 		// TODO: ensure that rootProviders can be singleton throught all app
 		rootProviders: {},
 		providerOptions: {
-			lifetime: Lifetime.SCOPED,
+			lifetime: Lifetime.SINGLETON,
 		},
 	};
 
@@ -176,7 +177,7 @@ export class DIContext<TFramework = unknown> {
 			return asValue(provider);
 		}
 
-		const resolverOptions = this.extractProviderOptions(module, provider);
+		const resolverOptions = this.extractResolverOptions(module, provider);
 
 		if (isCostructorProvider(provider)) {
 			const resolver = asClass(provider, resolverOptions);
@@ -215,14 +216,24 @@ export class DIContext<TFramework = unknown> {
 		throw new ERRORS.UnsupportedProviderTypeError(key, module.name);
 	}
 
-	private extractProviderOptions(
+	private extractResolverOptions(
 		module: M,
-		provider: AnyProvider,
+		provider: AnyProvider | ClassHandler,
+		context: "provider" | "handler" = "provider",
 	): BuildResolverOptions<any> {
 		const baseOptions = {
 			...this.options.providerOptions,
 			...module.providerOptions,
 		};
+
+		if (context === "handler" && isClassHandler(provider)) {
+			const { useClass, ...providerOptions } = provider;
+
+			return {
+				...baseOptions,
+				...providerOptions,
+			};
+		}
 
 		if (isClassProvider(provider)) {
 			const { useClass, allowCircular, ...providerOptions } = provider;
@@ -300,21 +311,23 @@ export class DIContext<TFramework = unknown> {
 
 		if (!onHandler || !handlers?.length) return;
 
-		for (const HandlerClass of handlers) {
-			const handlerSymbol = Symbol(`${prefix}-handler_${HandlerClass.name}`);
-			const { useClass, ...awilixOptions } = isClassHandler(HandlerClass)
-				? HandlerClass
-				: { useClass: HandlerClass };
+		for (const h of handlers) {
+			const handler = isClassHandler(h) ? h : { useClass: h };
+			const options = this.extractResolverOptions(m, handler, "handler");
+			const handlerSymbol = Symbol(
+				`${prefix}-handler_${handler.useClass.name}`,
+			);
 
 			scope.register({
-				[handlerSymbol]: asClass(useClass, {
-					...this.options.providerOptions,
-					...m.providerOptions,
-					...awilixOptions,
-				}),
+				[handlerSymbol]: asClass(handler.useClass, options),
 			});
 
-			onHandler(() => scope.resolve(handlerSymbol));
+			onHandler(() => {
+				const requestScope =
+					options.lifetime === Lifetime.SINGLETON ? scope : scope.createScope();
+
+				return requestScope.resolve(handlerSymbol);
+			});
 		}
 	}
 

@@ -2,17 +2,14 @@ import {
 	createStaticModule,
 	forwardRef,
 	type ModuleDef,
-	type StaticModule,
 	type ModuleRef,
+	type StaticModule,
 } from "awilix-modular";
-
-import { OwnersService } from "./owners.service.js";
-import { Owners1Service } from "./owners1.service.js";
-
+import { CatsModule, type CatsModuleDef } from "../cats/cats.module.js";
 import { GetOwnersController } from "./get-owners.controller.js";
 import { GetOwnersQueryHandler } from "./get-owners.q-handler.js";
-
-import { CatsModule, CatsModuleDef } from "../cats/cats.module.js";
+import { OwnersService } from "./owners.service.js";
+import { Owners1Service } from "./owners1.service.js";
 
 export type OwnersModuleQueryContracts = typeof GetOwnersQueryHandler.contract;
 
@@ -40,19 +37,22 @@ export const OwnersModule: StaticModule<OwnersModuleDef> =
 			},
 			ownersService: {
 				useClass: OwnersService,
+				lifetime: "SCOPED",
 			},
 		},
 
 		exports: {
 			owners1Service: {
 				useClass: Owners1Service,
+				lifetime: "SCOPED",
 			},
 			ownersService: {
 				useClass: OwnersService,
+				lifetime: "SCOPED",
 				// allowCircular: true,
 			},
 		},
 
-		queryHandlers: [GetOwnersQueryHandler],
+		queryHandlers: [{ useClass: GetOwnersQueryHandler, lifetime: "SCOPED" }],
 		controllers: [GetOwnersController],
 	});

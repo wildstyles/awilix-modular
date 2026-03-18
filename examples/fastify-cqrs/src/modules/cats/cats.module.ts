@@ -1,13 +1,10 @@
 import { createStaticModule, type ModuleDef } from "awilix-modular";
 
 import { OwnersModule } from "@/modules/owners/owners.module.js";
-
-import { GetCatsController } from "./get-cats.controller.js";
-
-import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
-
 import { CatsService } from "./cats.service.js";
 import { DogsService } from "./dogs.service.js";
+import { GetCatsController } from "./get-cats.controller.js";
+import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
 
 export type CatsModuleQueryContracts = typeof GetCatsQueryHandler.contract;
 
@@ -35,10 +32,12 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	providers: {
 		dogsService: {
 			useClass: DogsService,
+			lifetime: "SCOPED",
 		},
 		catsService: {
 			useClass: CatsService,
-			// lifetime: "TRANSIENT",
+			lifetime: "SCOPED",
+			//
 			allowCircular: true,
 		},
 	},
@@ -46,7 +45,7 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	exports: {
 		catsService: {
 			allowCircular: true,
-			// lifetime: "TRANSIENT",
+			lifetime: "SCOPED",
 
 			useClass: CatsService,
 		},
@@ -54,7 +53,7 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 
 	queryHandlers: [
 		// GetCatsQueryHandler,
-		{ useClass: GetCatsQueryHandler, lifetime: "TRANSIENT" },
+		{ useClass: GetCatsQueryHandler, lifetime: "SCOPED" },
 	],
 	controllers: [GetCatsController],
 });

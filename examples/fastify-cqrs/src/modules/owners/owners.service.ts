@@ -13,16 +13,16 @@ import type { Deps } from "./owners.module.js";
 export class OwnersService {
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
-	constructor(private readonly catsService: Deps["catsService"]) {
-		console.log(`OwnersService created with instanceId: ${this.instanceId}`);
-	}
+	constructor(private readonly catsService: Deps["catsService"]) {}
 
 	getInstanceId(): string {
 		return this.instanceId;
 	}
 
-	addOwner() {
-		console.log("3: add owner");
-		this.catsService.addCat();
+	getOwners() {
+		return {
+			catsServiceId: this.catsService.getInstanceId(),
+			ownerServiceId: this.instanceId,
+		};
 	}
 }
