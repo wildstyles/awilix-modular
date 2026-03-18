@@ -13,12 +13,13 @@ import {
 import type { Handler } from "./cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
+	type AnyProvider,
 	type ControllerConstructor,
+	isClassHandler,
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
 	isForwardRef,
-	isClassHandler,
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
@@ -52,6 +53,7 @@ export class DIContext<TFramework = unknown> {
 	private readonly sorter = new ProviderDependencySorter();
 	private readonly options: DiContextOptions<TFramework> &
 		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
+		// TODO: ensure that rootProviders can be singleton throught all app
 		rootProviders: {},
 		providerOptions: {
 			lifetime: Lifetime.SCOPED,
@@ -105,8 +107,7 @@ export class DIContext<TFramework = unknown> {
 		// Store the scope in the map before processing (for circular references)
 		this.moduleScopeMap.set(m, scope);
 
-		const importedModulesWithScope = (m.imports || []).map((imported) => {
-			const module = isForwardRef(imported) ? imported.resolve() : imported;
+		const importedModulesWithScope = this.resolveImports(m).map((module) => {
 			const container = createContainer(this.options.containerOptions);
 			container.register(this.options.rootProviders);
 
@@ -147,8 +148,8 @@ export class DIContext<TFramework = unknown> {
 			},
 		);
 
-		this.processQueryHandlers(m, scope);
-		this.processCommandHandlers(m, scope);
+		this.processHandlers(m, scope, "query");
+		this.processHandlers(m, scope, "command");
 		this.processControllers(m, scope);
 
 		return {
@@ -166,8 +167,7 @@ export class DIContext<TFramework = unknown> {
 		wrapForExport,
 	}: {
 		key: string;
-		// TODO: remove any
-		provider: any;
+		provider: AnyProvider;
 		resolutionScope: AwilixContainer;
 		module: M;
 		wrapForExport?: boolean;
@@ -263,11 +263,30 @@ export class DIContext<TFramework = unknown> {
 		if ((m.imports || []).some(isForwardRef)) this.forwardRefModules.add(m);
 	}
 
-	private processQueryHandlers(m: M, scope: AwilixContainer) {
-		if (!this.options.onQueryHandler || !m.queryHandlers?.length) return;
+	private processHandlers(
+		m: M,
+		scope: AwilixContainer,
+		handlerType: "query" | "command",
+	) {
+		const config = {
+			query: {
+				prefix: "q",
+				handlers: m.queryHandlers,
+				onHandler: this.options.onQueryHandler,
+			},
+			command: {
+				prefix: "c",
+				handlers: m.commandHandlers,
+				onHandler: this.options.onCommandHandler,
+			},
+		};
 
-		for (const HandlerClass of m.queryHandlers) {
-			const handlerSymbol = Symbol(`q-handler_${HandlerClass.name}`);
+		const { prefix, handlers, onHandler } = config[handlerType];
+
+		if (!onHandler || !handlers?.length) return;
+
+		for (const HandlerClass of handlers) {
+			const handlerSymbol = Symbol(`${prefix}-handler_${HandlerClass.name}`);
 			const { useClass, ...awilixOptions } = isClassHandler(HandlerClass)
 				? HandlerClass
 				: { useClass: HandlerClass };
@@ -280,28 +299,7 @@ export class DIContext<TFramework = unknown> {
 				}),
 			});
 
-			this.options.onQueryHandler(() => scope.resolve(handlerSymbol));
-		}
-	}
-
-	private processCommandHandlers(m: M, scope: AwilixContainer) {
-		if (!this.options.onCommandHandler || !m.commandHandlers?.length) return;
-
-		for (const HandlerClass of m.commandHandlers) {
-			const handlerSymbol = Symbol(`c-handler_${HandlerClass.name}`);
-			const { useClass, ...awilixOptions } = isClassHandler(HandlerClass)
-				? HandlerClass
-				: { useClass: HandlerClass };
-
-			scope.register({
-				[handlerSymbol]: asClass(useClass, {
-					...this.options.providerOptions,
-					...m.providerOptions,
-					...awilixOptions,
-				}),
-			});
-
-			this.options.onCommandHandler(() => scope.resolve(handlerSymbol));
+			onHandler(() => scope.resolve(handlerSymbol));
 		}
 	}
 
@@ -348,11 +346,7 @@ export class DIContext<TFramework = unknown> {
 	private ensureImportedModulesUniqueness(m: M) {
 		const importedNames = new Set<string>();
 
-		for (const importItem of m.imports || []) {
-			const imported = isForwardRef(importItem)
-				? importItem.resolve()
-				: importItem;
-
+		for (const imported of this.resolveImports(m)) {
 			if (importedNames.has(imported.name)) {
 				throw new ERRORS.DuplicateModuleImportError(m.name, imported.name);
 			}
@@ -363,12 +357,9 @@ export class DIContext<TFramework = unknown> {
 
 	private ensureNoProviderNameConflicts(m: M) {
 		const moduleProviderKeys = Object.keys(m.providers || {});
-		const importedProviderKeys = (m.imports || []).flatMap((importItem) => {
-			const importedModule = isForwardRef(importItem)
-				? importItem.resolve()
-				: importItem;
-			return Object.keys(importedModule.exports || {});
-		});
+		const importedProviderKeys = this.resolveImports(m).flatMap((importItem) =>
+			Object.keys(importItem.exports || {}),
+		);
 
 		const conflicts = importedProviderKeys.filter((key) =>
 			moduleProviderKeys.includes(key),
@@ -377,6 +368,12 @@ export class DIContext<TFramework = unknown> {
 		if (conflicts.length > 0) {
 			throw new ERRORS.ProviderNameConflictError(m.name, conflicts);
 		}
+	}
+
+	private resolveImports(m: M): M[] {
+		return (m.imports || []).map((importItem) =>
+			isForwardRef(importItem) ? importItem.resolve() : importItem,
+		);
 	}
 
 	private buildImportedScopesMap(
