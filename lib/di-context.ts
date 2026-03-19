@@ -26,12 +26,24 @@ import {
 } from "./di-context.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
+// Symbol to mark and identify root request scopes
+const REQUEST_ROOT_SYMBOL = Symbol("REQUEST_ROOT");
+// Symbol to store the parent module scope reference
+const PARENT_MODULE_SCOPE_SYMBOL = Symbol("PARENT_MODULE_SCOPE");
+
 interface DiContextOptions<TFramework = unknown> {
 	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onController?: (
 		ControllerClass: ControllerConstructor<TFramework>,
-		scope: AwilixContainer,
+		context: {
+			/** The module's base scope */
+			moduleScope: AwilixContainer;
+			/** Create a request-scoped child of the module scope */
+			createRequestScope: () => AwilixContainer;
+			/** Resolve the controller from a given scope */
+			resolveController: (scope: AwilixContainer) => TFramework;
+		},
 	) => void;
 	containerOptions?: ContainerOptions;
 	rootProviders?: Record<string, Resolver<any>>;
@@ -353,7 +365,31 @@ export class DIContext<TFramework = unknown> {
 
 			if (!existingModule) {
 				this.registeredControllers.set(ControllerClass, m);
-				this.options.onController(ControllerClass, diScope);
+
+				// Register a symbol for this controller in the module scope
+				const controllerSymbol = Symbol(`controller_${ControllerClass.name}`);
+				diScope.register({
+					[controllerSymbol]: asClass(ControllerClass, {
+						...this.options.providerOptions,
+						...m.providerOptions,
+					}),
+				});
+
+				this.options.onController(ControllerClass, {
+					moduleScope: diScope,
+					createRequestScope: () => {
+						const requestScope = diScope.createScope();
+						// Mark as root request scope for SCOPED export resolution
+						requestScope.register({
+							[REQUEST_ROOT_SYMBOL]: asValue(true),
+							[PARENT_MODULE_SCOPE_SYMBOL]: asValue(diScope),
+						});
+						return requestScope;
+					},
+					resolveController: (scope: AwilixContainer) => {
+						return scope.resolve(controllerSymbol);
+					},
+				});
 				continue;
 			}
 
