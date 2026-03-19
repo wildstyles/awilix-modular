@@ -271,11 +271,15 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
 	queryHandlers?: (ClassHandler | HandlerConstructor)[];
 	commandHandlers?: (ClassHandler | HandlerConstructor)[];
-	controllers?: ControllerConstructor<any>[];
+	controllers?: (ClassController | ControllerConstructor<any>)[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &
 	WithExports<Def> &
 	WithImports<Def>;
+
+type ClassController = {
+	useClass: ControllerConstructor<any>;
+} & BuildResolverOptions<any>;
 
 export type DynamicModuleOptions = {
 	registerControllers?: boolean;
@@ -296,6 +300,16 @@ export type DynamicModule<TDef extends DynamicModuleDef> = {
 export function isClassHandler(handler: unknown): handler is ClassHandler {
 	return (
 		typeof handler === "object" && handler !== null && "useClass" in handler
+	);
+}
+
+export function isClassController(
+	controller: unknown,
+): controller is ClassController {
+	return (
+		typeof controller === "object" &&
+		controller !== null &&
+		"useClass" in controller
 	);
 }
 

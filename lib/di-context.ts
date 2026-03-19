@@ -16,7 +16,9 @@ import {
 	type AnyProvider,
 	type ClassHandler,
 	type ControllerConstructor,
+	type Controller,
 	isClassHandler,
+	isClassController,
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
@@ -26,28 +28,13 @@ import {
 } from "./di-context.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
-// Symbol to mark and identify root request scopes
-const REQUEST_ROOT_SYMBOL = Symbol("REQUEST_ROOT");
-// Symbol to store the parent module scope reference
-const PARENT_MODULE_SCOPE_SYMBOL = Symbol("PARENT_MODULE_SCOPE");
-
 interface DiContextOptions<TFramework = unknown> {
 	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
-	onController?: (
-		ControllerClass: ControllerConstructor<TFramework>,
-		context: {
-			/** The module's base scope */
-			moduleScope: AwilixContainer;
-			/** Create a request-scoped child of the module scope */
-			createRequestScope: () => AwilixContainer;
-			/** Resolve the controller from a given scope */
-			resolveController: (scope: AwilixContainer) => TFramework;
-		},
-	) => void;
 	containerOptions?: ContainerOptions;
 	rootProviders?: Record<string, Resolver<any>>;
 	providerOptions?: Partial<BuildResolverOptions<any>>;
+	framework?: TFramework;
 }
 
 export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
@@ -237,14 +224,17 @@ export class DIContext<TFramework = unknown> {
 	private extractResolverOptions(
 		module: M,
 		provider: AnyProvider | ClassHandler,
-		context: "provider" | "handler" = "provider",
+		context: "provider" | "handler" | "controller" = "provider",
 	): BuildResolverOptions<any> {
 		const baseOptions = {
 			...this.options.providerOptions,
 			...module.providerOptions,
 		};
 
-		if (context === "handler" && isClassHandler(provider)) {
+		if (
+			(context === "controller" && isClassController(provider)) ||
+			(context === "handler" && isClassHandler(provider))
+		) {
 			const { useClass, ...providerOptions } = provider;
 
 			return {
@@ -354,42 +344,48 @@ export class DIContext<TFramework = unknown> {
 	}
 
 	private processControllers(m: M, diScope: AwilixContainer) {
-		if (!this.options.onController || !m.controllers?.length) return;
+		if (!m.controllers?.length) return;
 
 		if (new Set(m.controllers).size !== m.controllers.length) {
 			throw new ERRORS.DuplicateControllersInModuleError(m.name);
 		}
 
-		for (const ControllerClass of m.controllers) {
-			const existingModule = this.registeredControllers.get(ControllerClass);
+		for (const c of m.controllers) {
+			const controller = isClassController(c) ? c : { useClass: c };
+			const existingModule = this.registeredControllers.get(
+				controller.useClass,
+			);
 
 			if (!existingModule) {
-				this.registeredControllers.set(ControllerClass, m);
+				this.registeredControllers.set(controller.useClass, m);
 
-				// Register a symbol for this controller in the module scope
-				const controllerSymbol = Symbol(`controller_${ControllerClass.name}`);
+				const controllerSymbol = Symbol(
+					`controller_${controller.useClass.name}`,
+				);
+				const options = this.extractResolverOptions(
+					m,
+					controller,
+					"controller",
+				);
+
 				diScope.register({
-					[controllerSymbol]: asClass(ControllerClass, {
-						...this.options.providerOptions,
-						...m.providerOptions,
+					[controllerSymbol]: asClass(controller.useClass, {
+						...options,
+						...(options.lifetime !== Lifetime.SINGLETON && {
+							injector: () => ({
+								resolveSelf: () =>
+									diScope.createScope().resolve(controllerSymbol),
+							}),
+						}),
 					}),
 				});
 
-				this.options.onController(ControllerClass, {
-					moduleScope: diScope,
-					createRequestScope: () => {
-						const requestScope = diScope.createScope();
-						// Mark as root request scope for SCOPED export resolution
-						requestScope.register({
-							[REQUEST_ROOT_SYMBOL]: asValue(true),
-							[PARENT_MODULE_SCOPE_SYMBOL]: asValue(diScope),
-						});
-						return requestScope;
-					},
-					resolveController: (scope: AwilixContainer) => {
-						return scope.resolve(controllerSymbol);
-					},
-				});
+				if (this.options.framework) {
+					diScope
+						.resolve<Controller<TFramework>>(controllerSymbol)
+						.registerRoutes(this.options.framework);
+				}
+
 				continue;
 			}
 
@@ -400,7 +396,7 @@ export class DIContext<TFramework = unknown> {
 
 			// Different module trying to register the same controller - throw error
 			throw new ERRORS.ControllerAlreadyRegisteredError(
-				ControllerClass.name,
+				controller.useClass.name,
 				existingModule.name,
 			);
 		}

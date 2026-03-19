@@ -5,7 +5,7 @@ export class DogsService {
 
 	constructor(
 		private readonly catsService: Deps["catsService"],
-		private readonly ownersService: Deps["ownersService"],
+		// private readonly ownersService: Deps["ownersService"],
 	) {}
 
 	getInstanceId(): string {
@@ -14,7 +14,7 @@ export class DogsService {
 
 	getDogs() {
 		return {
-			ownersServiceId: this.ownersService.getInstanceId(),
+			// ownersServiceId: this.ownersService.getInstanceId(),
 			dogsServiceId: this.getInstanceId(),
 			catsServiceId: this.catsService.getInstanceId(),
 		};

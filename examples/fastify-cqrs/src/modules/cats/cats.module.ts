@@ -16,7 +16,7 @@ export type CatsModuleDef = ModuleDef<{
 	};
 	// exportKeys: "catsService";
 	exportKeys: "catsService";
-	imports: [typeof OwnersModule];
+	// imports: [typeof OwnersModule];
 }>;
 
 export type Deps = CatsModuleDef["deps"];
@@ -24,22 +24,23 @@ export type Deps = CatsModuleDef["deps"];
 export const CatsModule = createStaticModule<CatsModuleDef>({
 	name: "CatsModule",
 
-	imports: [OwnersModule],
+	// imports: [OwnersModule],
 
 	providerOptions: {
-		lifetime: "SCOPED",
+		// lifetime: "SCOPED",
 		// lifetime: "TRANSIENT",
 	},
 
 	providers: {
 		dogsService: {
 			useClass: DogsService,
-			// lifetime: "SCOPED",
+			// lifetime: "TRANSIENT",
 		},
 		catsService: {
 			useClass: CatsService,
 			// lifetime: "SCOPED",
 			//
+
 			allowCircular: true,
 		},
 	},
@@ -56,8 +57,12 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	},
 
 	queryHandlers: [
-		GetCatsQueryHandler,
+		// GetCatsQueryHandler,
 		// { useClass: GetCatsQueryHandler, lifetime: "SCOPED" },
 	],
-	controllers: [GetCatsController, GetCatsScopedController],
+	controllers: [
+		GetCatsController,
+		// GetCatsScopedController,
+		{ useClass: GetCatsScopedController, lifetime: "SCOPED" },
+	],
 });
