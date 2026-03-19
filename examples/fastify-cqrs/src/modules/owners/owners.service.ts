@@ -13,16 +13,20 @@ import type { Deps } from "./owners.module.js";
 export class OwnersService {
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
-	constructor(private readonly catsService: Deps["catsService"]) {}
+	constructor(
+		private readonly catsService: Deps["catsService"],
+		private readonly owners1Service: Deps["owners1Service"],
+	) {}
 
 	getInstanceId(): string {
-		return this.instanceId;
+		return this.instanceId + " +++";
 	}
 
 	getOwners() {
 		return {
 			catsServiceId: this.catsService.getInstanceId(),
-			ownerServiceId: this.instanceId,
+			ownerServiceId: this.getInstanceId(),
+			owners1Service: this.owners1Service.getOwners1(),
 		};
 	}
 }

@@ -23,6 +23,7 @@ export class GetCatsQueryHandler implements Handler<GetCatsQueryContract> {
 		return {
 			handlerId: this.instanceId,
 			dogsServiceId: this.dogsService.getInstanceId(),
+			catsServiceId: this.catsService.getInstanceId(),
 			catsService: this.catsService.getCats(),
 		} as any;
 	}

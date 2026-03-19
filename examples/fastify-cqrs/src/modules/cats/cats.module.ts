@@ -25,18 +25,19 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 
 	imports: [OwnersModule],
 
-	// providerOptions: {
-	// 	lifetime: "TRANSIENT",
-	// },
+	providerOptions: {
+		lifetime: "SCOPED",
+		// lifetime: "TRANSIENT",
+	},
 
 	providers: {
 		dogsService: {
 			useClass: DogsService,
-			lifetime: "SCOPED",
+			// lifetime: "SCOPED",
 		},
 		catsService: {
 			useClass: CatsService,
-			lifetime: "SCOPED",
+			// lifetime: "SCOPED",
 			//
 			allowCircular: true,
 		},
@@ -45,15 +46,17 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	exports: {
 		catsService: {
 			allowCircular: true,
-			lifetime: "SCOPED",
+			// lifetime: "SINGLETON",
+			// lifetime: "SCOPED",
+			lifetime: "TRANSIENT",
 
 			useClass: CatsService,
 		},
 	},
 
 	queryHandlers: [
-		// GetCatsQueryHandler,
-		{ useClass: GetCatsQueryHandler, lifetime: "SCOPED" },
+		GetCatsQueryHandler,
+		// { useClass: GetCatsQueryHandler, lifetime: "SCOPED" },
 	],
 	controllers: [GetCatsController],
 });

@@ -10,12 +10,12 @@ export class CatsService {
 	) {}
 
 	getInstanceId(): string {
-		return this.instanceId;
+		return this.instanceId + " ???";
 	}
 
 	getCats() {
 		return {
-			catsServiceId: this.instanceId,
+			catsServiceId: this.getInstanceId(),
 			dogsServiceId: this.dogsService.getInstanceId(),
 			ownersServiceId: this.ownersService.getInstanceId(),
 			ownersService1Id: this.owners1Service.getInstanceId(),

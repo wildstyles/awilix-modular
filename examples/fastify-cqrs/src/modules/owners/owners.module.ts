@@ -31,28 +31,37 @@ export const OwnersModule: StaticModule<OwnersModuleDef> =
 
 		imports: [forwardRef(() => CatsModule)],
 
+		providerOptions: {
+			// lifetime: "SCOPED",
+			lifetime: "TRANSIENT",
+		},
+
 		providers: {
 			owners1Service: {
 				useClass: Owners1Service,
+				// lifetime: "SCOPED",
 			},
 			ownersService: {
 				useClass: OwnersService,
-				lifetime: "SCOPED",
+				// lifetime: "SCOPED",
 			},
 		},
 
 		exports: {
 			owners1Service: {
 				useClass: Owners1Service,
+				// lifetime: "SCOPED",
 				lifetime: "SCOPED",
 			},
 			ownersService: {
 				useClass: OwnersService,
+				// lifetime: "TRANSIENT",
 				lifetime: "SCOPED",
+
 				// allowCircular: true,
 			},
 		},
 
-		queryHandlers: [{ useClass: GetOwnersQueryHandler, lifetime: "SCOPED" }],
+		// queryHandlers: [{ useClass: GetOwnersQueryHandler, lifetime: "SCOPED" }],
 		controllers: [GetOwnersController],
 	});

@@ -209,7 +209,13 @@ export class DIContext<TFramework = unknown> {
 				: baseResolver;
 
 			return wrapForExport
-				? asFunction(() => resolver.resolve(resolutionScope), resolverOptions)
+				? asFunction(() => {
+						return resolver.resolve(
+							resolverOptions.lifetime === Lifetime.SINGLETON
+								? resolutionScope
+								: resolutionScope.createScope(),
+						);
+					}, resolverOptions)
 				: resolver;
 		}
 
