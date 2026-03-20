@@ -4,7 +4,7 @@ import { OwnersModule } from "@/modules/owners/owners.module.js";
 import { CatsService } from "./cats.service.js";
 import { DogsService } from "./dogs.service.js";
 import { GetCatsController } from "./get-cats.controller.js";
-import type { GetCatsQueryHandler } from "./get-cats.q-handler.js";
+import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
 import { GetCatsScopedController } from "./get-cats-scoped.controller.js";
 
 export type CatsModuleQueryContracts = typeof GetCatsQueryHandler.contract;
@@ -57,12 +57,13 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	},
 
 	queryHandlers: [
-		// GetCatsQueryHandler,
+		GetCatsQueryHandler,
 		// { useClass: GetCatsQueryHandler, lifetime: "SCOPED" },
 	],
 	controllers: [
-		GetCatsController,
+		// GetCatsController,
 		// GetCatsScopedController,
+		{ useClass: GetCatsController, lifetime: "SCOPED" },
 		{ useClass: GetCatsScopedController, lifetime: "SCOPED" },
 	],
 });

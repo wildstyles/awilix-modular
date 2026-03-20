@@ -1,5 +1,5 @@
-import type { BuildResolverOptions } from "awilix";
-import type { Handler } from "./cqrs.types.ts";
+import type { BuildResolverOptions, Constructor } from "awilix";
+import type { Handler } from "./cqrs/cqrs.types.ts";
 
 // ============================================================================
 // Base Type Definitions
@@ -8,10 +8,6 @@ import type { Handler } from "./cqrs.types.ts";
 declare const emptyObjectSymbol: unique symbol;
 export type EmptyObject = { [emptyObjectSymbol]?: never };
 type UnknownRecord = Record<PropertyKey, unknown>;
-
-type Constructor<T, Arguments extends unknown[] = any[]> = new (
-	...arguments_: Arguments
-) => T;
 
 /**
  * Common dependencies available to all modules.

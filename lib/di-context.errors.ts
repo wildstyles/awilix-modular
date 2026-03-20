@@ -95,3 +95,12 @@ export class ModuleScopeNotFoundError extends Error {
 		this.name = "ModuleScopeNotFoundError";
 	}
 }
+
+export class UnsupportedFrameworkError extends Error {
+	constructor() {
+		super(
+			"Unsupported framework detected. Only Fastify and Express are currently supported for decorator-based routing.",
+		);
+		this.name = "UnsupportedFrameworkError";
+	}
+}

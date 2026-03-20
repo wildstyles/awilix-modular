@@ -11,14 +11,12 @@ import {
 	Lifetime,
 	type Resolver,
 } from "awilix";
-import type { Handler } from "./cqrs.types.js";
+import { ControllerProcessor } from "./controller-processor.js";
+import type { Handler } from "./cqrs/cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
 	type AnyProvider,
 	type ClassHandler,
-	type Controller,
-	type ControllerConstructor,
-	isClassController,
 	isClassHandler,
 	isClassProvider,
 	isCostructorProvider,
@@ -29,13 +27,13 @@ import {
 } from "./di-context.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
-interface DiContextOptions<TFramework = unknown> {
+interface DiContextOptions {
+	framework: unknown;
 	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	containerOptions?: ContainerOptions;
 	rootProviders?: Record<string, Resolver<any>>;
 	providerOptions?: Partial<BuildResolverOptions<any>>;
-	framework?: TFramework;
 }
 
 export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
@@ -44,52 +42,35 @@ export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
 	importedScopes: Map<string, ModuleScopeTree>;
 }
 
-export class DIContext<TFramework = unknown> {
-	private readonly registeredControllers = new WeakMap<
-		ControllerConstructor<TFramework>,
-		M
-	>();
+export class DIContext {
 	private readonly forwardRefModules = new WeakSet<M>();
 	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
 	private readonly sorter = new ProviderDependencySorter();
-	private readonly options: DiContextOptions<TFramework> &
-		Required<
-			Pick<
-				DiContextOptions,
-				"providerOptions" | "rootProviders" | "containerOptions"
-			>
-		> = {
-		// TODO: ensure that rootProviders can be singleton throught all app
-		rootProviders: {},
-		containerOptions: {
-			strict: true,
-			injectionMode: InjectionMode.CLASSIC,
-		},
-		providerOptions: {
-			lifetime: Lifetime.SINGLETON,
-		},
-	};
+	private readonly controllerProcessor: ControllerProcessor;
+	private readonly options: DiContextOptions;
 
-	private constructor(options: DiContextOptions<TFramework> = {}) {
+	private constructor(options: DiContextOptions) {
 		this.options = {
-			...this.options,
 			...options,
 			containerOptions: {
-				...this.options.containerOptions,
+				strict: true,
+				injectionMode: InjectionMode.CLASSIC,
 				...options.containerOptions,
 			},
 			providerOptions: {
-				...this.options.providerOptions,
+				lifetime: Lifetime.SINGLETON,
 				...options.providerOptions,
 			},
 		};
+
+		this.controllerProcessor = new ControllerProcessor(
+			this.options.framework,
+			this.options.providerOptions || {},
+		);
 	}
 
-	static create<TFramework = unknown>(
-		module: M,
-		options?: DiContextOptions<TFramework>,
-	): ModuleScopeTree {
-		const context = new DIContext<TFramework>(options || {});
+	static create(module: M, options: DiContextOptions): ModuleScopeTree {
+		const context = new DIContext(options);
 
 		return context.registerModuleWithScope(
 			module,
@@ -100,7 +81,8 @@ export class DIContext<TFramework = unknown> {
 
 	private createContainerWithRootProviders(): AwilixContainer {
 		const container = createContainer(this.options.containerOptions);
-		container.register(this.options.rootProviders);
+		// TODO: ensure they can be singleton throuout app
+		container.register(this.options.rootProviders || {});
 
 		return container;
 	}
@@ -176,7 +158,7 @@ export class DIContext<TFramework = unknown> {
 
 		this.processHandlers(m, scope, "query");
 		this.processHandlers(m, scope, "command");
-		this.processControllers(m, scope);
+		this.controllerProcessor.processControllers(m, scope);
 
 		return {
 			scope,
@@ -250,17 +232,14 @@ export class DIContext<TFramework = unknown> {
 	private extractResolverOptions(
 		module: M,
 		provider: AnyProvider | ClassHandler,
-		context: "provider" | "handler" | "controller" = "provider",
+		context: "provider" | "handler" = "provider",
 	): BuildResolverOptions<any> {
 		const baseOptions = {
 			...this.options.providerOptions,
 			...module.providerOptions,
 		};
 
-		if (
-			(context === "controller" && isClassController(provider)) ||
-			(context === "handler" && isClassHandler(provider))
-		) {
+		if (context === "handler" && isClassHandler(provider)) {
 			const { useClass, ...providerOptions } = provider;
 
 			return {
@@ -366,65 +345,6 @@ export class DIContext<TFramework = unknown> {
 
 				return requestScope.resolve(handlerSymbol);
 			});
-		}
-	}
-
-	private processControllers(m: M, diScope: AwilixContainer) {
-		if (!m.controllers?.length) return;
-
-		if (new Set(m.controllers).size !== m.controllers.length) {
-			throw new ERRORS.DuplicateControllersInModuleError(m.name);
-		}
-
-		for (const c of m.controllers) {
-			const controller = isClassController(c) ? c : { useClass: c };
-			const existingModule = this.registeredControllers.get(
-				controller.useClass,
-			);
-
-			if (!existingModule) {
-				this.registeredControllers.set(controller.useClass, m);
-
-				const controllerSymbol = Symbol(
-					`controller_${controller.useClass.name}`,
-				);
-				const options = this.extractResolverOptions(
-					m,
-					controller,
-					"controller",
-				);
-
-				diScope.register({
-					[controllerSymbol]: asClass(controller.useClass, {
-						...options,
-						...(options.lifetime !== Lifetime.SINGLETON && {
-							injector: () => ({
-								resolveSelf: () =>
-									diScope.createScope().resolve(controllerSymbol),
-							}),
-						}),
-					}),
-				});
-
-				if (this.options.framework) {
-					diScope
-						.resolve<Controller<TFramework>>(controllerSymbol)
-						.registerRoutes(this.options.framework);
-				}
-
-				continue;
-			}
-
-			// Same module instance imported multiple times - skip silently
-			if (existingModule === m) {
-				continue;
-			}
-
-			// Different module trying to register the same controller - throw error
-			throw new ERRORS.ControllerAlreadyRegisteredError(
-				controller.useClass.name,
-				existingModule.name,
-			);
 		}
 	}
 
