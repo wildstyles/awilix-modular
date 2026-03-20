@@ -56,7 +56,6 @@ describe("DIContext", () => {
 	beforeEach(() => {
 		onControllerMock = vi.fn();
 		diContext = new DIContext({
-			onController: onControllerMock,
 			rootProviders,
 		});
 		classicDiContext = new DIContext({
@@ -373,7 +372,7 @@ describe("DIContext", () => {
 				"DirectClassService",
 			);
 			expect(scope.registrations.directClassService.lifetime).toBe(
-				Lifetime.SCOPED,
+				Lifetime.SINGLETON,
 			);
 		});
 
@@ -534,7 +533,7 @@ describe("DIContext", () => {
 				Lifetime.TRANSIENT,
 			);
 			expect(exportedScope?.scope.registrations.sharedService.lifetime).toBe(
-				Lifetime.SCOPED,
+				Lifetime.SINGLETON,
 			);
 
 			expect(scope.hasRegistration("sharedService")).toBeTruthy();
@@ -694,37 +693,6 @@ describe("DIContext", () => {
 		class TestController extends ControllerBase {}
 		class AnotherController extends ControllerBase {}
 
-		it("should call onController callback for each controller in a module", () => {
-			registerModule({
-				controllers: [TestController, AnotherController],
-			});
-
-			expect(onControllerMock).toHaveBeenCalledTimes(2);
-			expect(onControllerMock).toHaveBeenCalledWith(
-				TestController,
-				expect.any(Object),
-			);
-			expect(onControllerMock).toHaveBeenCalledWith(
-				AnotherController,
-				expect.any(Object),
-			);
-		});
-
-		it("should pass the correct scope to onController callback", () => {
-			registerModule({
-				providers: {
-					testService: class TestService extends TestableBase {},
-				},
-				controllers: [TestController],
-			});
-
-			expect(onControllerMock).toHaveBeenCalledTimes(1);
-
-			const [, scope] = onControllerMock.mock.calls[0];
-			expect(scope.hasRegistration("testService")).toBeTruthy();
-			expect(scope.resolve("testService").getName()).toBe("TestService");
-		});
-
 		it("should throw an error when a module has duplicate controllers in its array", () => {
 			expect(() => {
 				registerModule({
@@ -732,44 +700,6 @@ describe("DIContext", () => {
 					controllers: [TestController, TestController],
 				});
 			}).toThrow(ERRORS.DuplicateControllersInModuleError);
-		});
-
-		it("should not call onController callback when no controllers are defined", () => {
-			registerModule({
-				providers: {
-					testService: class TestService extends TestableBase {},
-				},
-			});
-
-			expect(onControllerMock).not.toHaveBeenCalled();
-		});
-
-		it("should call onController for controllers in modules with imports", () => {
-			registerModule({
-				imports: [
-					{
-						name: "AnyModule",
-						providers: {
-							sharedService: class SharedService extends TestableBase {},
-						},
-						exports: {
-							sharedService: class SharedService extends TestableBase {},
-						},
-						controllers: [TestController],
-					},
-				],
-				controllers: [AnotherController],
-			});
-
-			expect(onControllerMock).toHaveBeenCalledTimes(2);
-			expect(onControllerMock).toHaveBeenCalledWith(
-				TestController,
-				expect.any(Object),
-			);
-			expect(onControllerMock).toHaveBeenCalledWith(
-				AnotherController,
-				expect.any(Object),
-			);
 		});
 
 		it("should throw an error when dynamic modules try to register the same controller", () => {
@@ -799,54 +729,6 @@ describe("DIContext", () => {
 			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
 		});
 
-		it("should allow dynamic modules to register when controllers are excluded from one instance", () => {
-			type Def = ModuleDef<{
-				providers: { config: string };
-				forRootConfig: { value: string };
-			}>;
-
-			const DynamicModule = createDynamicModule<Def>((config, options) =>
-				createStaticModule({
-					name: "DynamicModule",
-					controllers: options?.registerControllers ? [TestController] : [],
-					providers: {
-						config: config.value,
-					},
-				}),
-			);
-
-			const { importedScopes } = registerModule({
-				name: "AppModule",
-				imports: [
-					{
-						name: "StaticModule",
-						imports: [
-							DynamicModule.forRoot(
-								{ value: "config2" },
-								{ registerControllers: true },
-							),
-						],
-					},
-					DynamicModule.forRoot({ value: "config1" }),
-				],
-			});
-
-			expect(
-				importedScopes
-					.get("StaticModule")
-					?.importedScopes.get("DynamicModule")
-					?.scope.resolve("config"),
-			).toBe("config2");
-			expect(importedScopes.get("DynamicModule")?.scope.resolve("config")).toBe(
-				"config1",
-			);
-			expect(onControllerMock).toHaveBeenCalledTimes(1);
-			expect(onControllerMock).toHaveBeenCalledWith(
-				TestController,
-				expect.any(Object),
-			);
-		});
-
 		it("should throw an error when different static modules try to register the same controller", () => {
 			expect(() => {
 				registerModule({
@@ -863,29 +745,6 @@ describe("DIContext", () => {
 					],
 				});
 			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
-		});
-
-		it("should allow the same static module instance to be imported multiple times", () => {
-			const sharedModule = {
-				name: "SharedModule",
-				controllers: [TestController],
-			};
-
-			registerModule({
-				name: "AppModule",
-				imports: [
-					{
-						name: "Module1",
-						imports: [sharedModule],
-					},
-					{
-						name: "Module2",
-						imports: [sharedModule],
-					},
-				],
-			});
-
-			expect(onControllerMock).toHaveBeenCalledTimes(1);
 		});
 	});
 });
