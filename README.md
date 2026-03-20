@@ -131,15 +131,12 @@ export const AppModule = createStaticModule<AppModuleDef>({
   imports: [UserModule],
 });
 
-// Create DI context with common dependencies
-const diContext = new DIContext({
+// Create DI context with root module and common dependencies
+DIContext.create(AppModule, {
   rootProviders: {
     logger: asClass(Logger).singleton(),
   },
 });
-
-// Register the AppModule
-diContext.registerModule(AppModule);
 
 // Extend CommonDependencies interface to make logger available globally
 declare module "awilix-modular" {
@@ -204,7 +201,7 @@ export const UserModule = createStaticModule<UserModuleDef>({
 import express, { type Express } from "express";
 
 const app = express();
-const diContext = new DIContext<Express>({
+DIContext.create<Express>(AppModule, {
   rootProviders: {
     logger: asClass(Logger).singleton(),
   },
@@ -215,7 +212,6 @@ const diContext = new DIContext<Express>({
   },
 });
 
-diContext.registerModule(AppModule);
 app.listen(3000);
 ```
 

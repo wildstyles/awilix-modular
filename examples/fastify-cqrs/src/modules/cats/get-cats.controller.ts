@@ -7,7 +7,6 @@ export class GetCatsController implements Controller {
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
 	registerRoutes(fastify: FastifyInstance) {
-		const that = this;
 		fastify.route({
 			method: "GET",
 			url: "/cats",
@@ -17,17 +16,17 @@ export class GetCatsController implements Controller {
 					200: GetCatsResponseSchema,
 				},
 			},
-			handler: async function (req, res) {
+			handler: async (req, res) => {
 				const result = await fastify.queryBus.execute(
 					"cats/get-cats",
 					req.query,
 				);
 
-				console.log(that.instanceId, "from controller");
+				console.log(this.instanceId, "from controller");
 
 				return res
 					.status(200)
-					.send({ result, controllerInstanceId: that.instanceId } as any);
+					.send({ result, controllerInstanceId: this.instanceId } as any);
 			},
 		});
 	}

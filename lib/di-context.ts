@@ -7,19 +7,19 @@ import {
 	type ContainerOptions,
 	createBuildResolver,
 	createContainer,
+	InjectionMode,
 	Lifetime,
 	type Resolver,
-	InjectionMode,
 } from "awilix";
 import type { Handler } from "./cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
 	type AnyProvider,
 	type ClassHandler,
-	type ControllerConstructor,
 	type Controller,
-	isClassHandler,
+	type ControllerConstructor,
 	isClassController,
+	isClassHandler,
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
@@ -70,7 +70,7 @@ export class DIContext<TFramework = unknown> {
 		},
 	};
 
-	constructor(options: DiContextOptions<TFramework> = {}) {
+	private constructor(options: DiContextOptions<TFramework> = {}) {
 		this.options = {
 			...this.options,
 			...options,
@@ -85,11 +85,24 @@ export class DIContext<TFramework = unknown> {
 		};
 	}
 
-	registerModule(module: M): ModuleScopeTree {
+	static create<TFramework = unknown>(
+		module: M,
+		options?: DiContextOptions<TFramework>,
+	): ModuleScopeTree {
+		const context = new DIContext<TFramework>(options || {});
+
+		return context.registerModuleWithScope(
+			module,
+			context.createContainerWithRootProviders(),
+			[],
+		);
+	}
+
+	private createContainerWithRootProviders(): AwilixContainer {
 		const container = createContainer(this.options.containerOptions);
 		container.register(this.options.rootProviders);
 
-		return this.registerModuleWithScope(module, container, []);
+		return container;
 	}
 
 	private registerModuleWithScope(
@@ -121,15 +134,14 @@ export class DIContext<TFramework = unknown> {
 		// Store the scope in the map before processing (for circular references)
 		this.moduleScopeMap.set(m, scope);
 
-		const importedModulesWithScope = this.resolveImports(m).map((module) => {
-			const container = createContainer(this.options.containerOptions);
-			container.register(this.options.rootProviders);
-
-			return {
-				...this.registerModuleWithScope(module, container, [...moduleChain, m]),
+		const importedModulesWithScope = this.resolveImports(m).map((module) => ({
+			...this.registerModuleWithScope(
 				module,
-			};
-		});
+				this.createContainerWithRootProviders(),
+				[...moduleChain, m],
+			),
+			module,
+		}));
 
 		importedModulesWithScope.forEach(
 			({ module: importedModule, scope: importedScope }) => {

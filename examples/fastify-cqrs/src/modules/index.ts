@@ -8,7 +8,7 @@ import {
 	CatsModule,
 	type CatsModuleQueryContracts,
 } from "@/modules/cats/cats.module.js";
-import { type OwnersModuleQueryContracts } from "@/modules/owners/owners.module.js";
+import type { OwnersModuleQueryContracts } from "@/modules/owners/owners.module.js";
 
 export type QueryContracts = CatsModuleQueryContracts &
 	OwnersModuleQueryContracts;

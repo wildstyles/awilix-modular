@@ -7,7 +7,7 @@ import {
 } from "awilix-modular";
 import { CatsModule, type CatsModuleDef } from "../cats/cats.module.js";
 import { GetOwnersController } from "./get-owners.controller.js";
-import { GetOwnersQueryHandler } from "./get-owners.q-handler.js";
+import type { GetOwnersQueryHandler } from "./get-owners.q-handler.js";
 import { OwnersService } from "./owners.service.js";
 import { Owners1Service } from "./owners1.service.js";
 

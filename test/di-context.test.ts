@@ -22,8 +22,6 @@ import {
 } from "../lib/di-context.types.js";
 
 describe("DIContext", () => {
-	let diContext: DIContext;
-
 	class ControllerBase implements Controller {
 		registerRoutes() {}
 	}
@@ -50,22 +48,21 @@ describe("DIContext", () => {
 	};
 	const rootResolversCount = Object.keys(rootProviders).length;
 
-	beforeEach(() => {
-		diContext = new DIContext({
-			rootProviders,
-			containerOptions: {
-				injectionMode: "PROXY",
-			},
-		});
-	});
-
 	function registerModule<Extends>(
 		module: Partial<AnyModule>,
 	): ModuleScopeTree<AwilixContainer<{ [k: string]: TestableBase & Extends }>> {
-		return diContext.registerModule({
-			name: "AnyModule",
-			...module,
-		});
+		return DIContext.create(
+			{
+				name: "AnyModule",
+				...module,
+			},
+			{
+				rootProviders,
+				containerOptions: {
+					injectionMode: "PROXY",
+				},
+			},
+		);
 	}
 
 	describe("Ensure that module interactions/declarations are correct", () => {
@@ -166,7 +163,12 @@ describe("DIContext", () => {
 			ModuleA.imports = [ModuleB];
 
 			expect(() => {
-				diContext.registerModule(ModuleC);
+				DIContext.create(ModuleC, {
+					rootProviders,
+					containerOptions: {
+						injectionMode: "PROXY",
+					},
+				});
 			}).toThrow(ERRORS.CircularModuleDependencyError);
 		});
 
@@ -582,13 +584,21 @@ describe("DIContext", () => {
 				},
 			};
 
-			const { importedScopes } = diContext.registerModule({
-				name: "AppModule",
-				imports: [LoggerModule, ConfigModule],
-				providers: {
-					appService: class AppService extends TestableBase {},
+			const { importedScopes } = DIContext.create(
+				{
+					name: "AppModule",
+					imports: [LoggerModule, ConfigModule],
+					providers: {
+						appService: class AppService extends TestableBase {},
+					},
 				},
-			});
+				{
+					rootProviders,
+					containerOptions: {
+						injectionMode: "PROXY",
+					},
+				},
+			);
 
 			const loggerModule = importedScopes.get("LoggerModule");
 			const configModule = importedScopes.get("ConfigModule");

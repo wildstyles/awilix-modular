@@ -16,7 +16,7 @@ async function bootstrap() {
 	fastify.decorate("queryBus", queryBusInstance);
 	fastify.decorate("commandBus", commandBusInstance);
 
-	const diContext = new DIContext({
+	DIContext.create(AppModule, {
 		framework: fastify,
 		onQueryHandler: (resolveHandler) => {
 			const { key } = resolveHandler();
@@ -26,8 +26,6 @@ async function bootstrap() {
 			});
 		},
 	});
-
-	diContext.registerModule(AppModule);
 
 	try {
 		await fastify.listen({ port: 3000, host: "0.0.0.0" });
