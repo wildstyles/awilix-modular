@@ -18,10 +18,6 @@ async function bootstrap() {
 
 	const diContext = new DIContext({
 		framework: fastify,
-		containerOptions: {
-			strict: true,
-			injectionMode: "CLASSIC",
-		},
 		onQueryHandler: (resolveHandler) => {
 			const { key } = resolveHandler();
 

@@ -5,7 +5,7 @@ import {
 	Lifetime,
 } from "awilix";
 
-import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as ERRORS from "../lib/di-context.errors.js";
 import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
@@ -15,7 +15,6 @@ import type {
 	ModuleDef,
 } from "../lib/di-context.types.js";
 import {
-	createDynamicModule,
 	createStaticModule,
 	type ForwardRef,
 	forwardRef,
@@ -24,8 +23,6 @@ import {
 
 describe("DIContext", () => {
 	let diContext: DIContext;
-	let classicDiContext: DIContext;
-	let onControllerMock: Mock;
 
 	class ControllerBase implements Controller {
 		registerRoutes() {}
@@ -54,13 +51,10 @@ describe("DIContext", () => {
 	const rootResolversCount = Object.keys(rootProviders).length;
 
 	beforeEach(() => {
-		onControllerMock = vi.fn();
 		diContext = new DIContext({
 			rootProviders,
-		});
-		classicDiContext = new DIContext({
 			containerOptions: {
-				injectionMode: "CLASSIC",
+				injectionMode: "PROXY",
 			},
 		});
 	});

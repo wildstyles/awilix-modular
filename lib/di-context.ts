@@ -9,6 +9,7 @@ import {
 	createContainer,
 	Lifetime,
 	type Resolver,
+	InjectionMode,
 } from "awilix";
 import type { Handler } from "./cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
@@ -52,9 +53,18 @@ export class DIContext<TFramework = unknown> {
 	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
 	private readonly sorter = new ProviderDependencySorter();
 	private readonly options: DiContextOptions<TFramework> &
-		Required<Pick<DiContextOptions, "providerOptions" | "rootProviders">> = {
+		Required<
+			Pick<
+				DiContextOptions,
+				"providerOptions" | "rootProviders" | "containerOptions"
+			>
+		> = {
 		// TODO: ensure that rootProviders can be singleton throught all app
 		rootProviders: {},
+		containerOptions: {
+			strict: true,
+			injectionMode: InjectionMode.CLASSIC,
+		},
 		providerOptions: {
 			lifetime: Lifetime.SINGLETON,
 		},
@@ -64,6 +74,10 @@ export class DIContext<TFramework = unknown> {
 		this.options = {
 			...this.options,
 			...options,
+			containerOptions: {
+				...this.options.containerOptions,
+				...options.containerOptions,
+			},
 			providerOptions: {
 				...this.options.providerOptions,
 				...options.providerOptions,
