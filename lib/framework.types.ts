@@ -38,6 +38,7 @@ export type ExpressMethod = Lowercase<Exclude<HttpVerb, "CONNECT" | "*">>;
 export const HttpFramework = {
 	FASTIFY: "fastify",
 	EXPRESS: "express",
+	UNKNOWN: "unknown",
 } as const;
 
 export type HttpFramework = (typeof HttpFramework)[keyof typeof HttpFramework];

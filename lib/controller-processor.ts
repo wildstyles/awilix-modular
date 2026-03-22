@@ -44,6 +44,9 @@ export class ControllerProcessor {
 	> = {
 		[HttpFramework.FASTIFY]: this.registerFastifyRoute.bind(this),
 		[HttpFramework.EXPRESS]: this.registerExpressRoute.bind(this),
+		[HttpFramework.UNKNOWN]: () => {
+			throw new ERRORS.UnsupportedFrameworkError();
+		},
 	};
 
 	constructor(
@@ -194,6 +197,7 @@ export class ControllerProcessor {
 				verbs: method.verbs,
 			});
 		});
+
 		return result;
 	}
 
@@ -254,7 +258,7 @@ export class ControllerProcessor {
 			return HttpFramework.EXPRESS;
 		}
 
-		throw new ERRORS.UnsupportedFrameworkError();
+		return HttpFramework.UNKNOWN;
 	}
 
 	private isFastifyFramework(): boolean {
