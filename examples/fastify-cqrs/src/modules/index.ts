@@ -8,13 +8,14 @@ import {
 	CatsModule,
 	type CatsModuleQueryContracts,
 } from "@/modules/cats/cats.module.js";
-import type { OwnersModuleQueryContracts } from "@/modules/owners/owners.module.js";
 
-export type QueryContracts = CatsModuleQueryContracts &
-	OwnersModuleQueryContracts;
+// aggregates all query contracts from each module
+export type QueryContracts = CatsModuleQueryContracts;
 
 export type CommandContracts = Record<string, never>;
 
+// ensures "registerRoutes" exist on controller with proper framework instance
+// type for framework route registration
 export interface Controller extends BaseController<FastifyInstance> {}
 
 export type AppModuleDef = ModuleDef<{

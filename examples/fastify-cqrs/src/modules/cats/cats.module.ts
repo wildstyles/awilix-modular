@@ -3,9 +3,13 @@ import { createStaticModule, type ModuleDef } from "awilix-modular";
 import { OwnersModule } from "@/modules/owners/owners.module.js";
 import { CatsService } from "./cats.service.js";
 import { DogsService } from "./dogs.service.js";
-import { GetCatsController } from "./get-cats.controller.js";
+
 import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
-import { GetCatsScopedController } from "./get-cats-scoped.controller.js";
+import { GetCatsService } from "./get-cats.service.js";
+
+import { CatsScopedController } from "./cats-scoped.controller.js";
+import { CatsDecoratedController } from "./cats-decorated.controller.js";
+import { CatsController } from "./cats.controller.js";
 
 export type CatsModuleQueryContracts = typeof GetCatsQueryHandler.contract;
 
@@ -13,10 +17,10 @@ export type CatsModuleDef = ModuleDef<{
 	providers: {
 		catsService: CatsService;
 		dogsService: DogsService;
+		getCatsService: GetCatsService;
 	};
-	// exportKeys: "catsService";
 	exportKeys: "catsService";
-	// imports: [typeof OwnersModule];
+	imports: [typeof OwnersModule];
 }>;
 
 export type Deps = CatsModuleDef["deps"];
@@ -24,7 +28,7 @@ export type Deps = CatsModuleDef["deps"];
 export const CatsModule = createStaticModule<CatsModuleDef>({
 	name: "CatsModule",
 
-	// imports: [OwnersModule],
+	imports: [OwnersModule],
 
 	providerOptions: {
 		// lifetime: "SCOPED",
@@ -32,6 +36,9 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	},
 
 	providers: {
+		getCatsService: {
+			useClass: GetCatsService,
+		},
 		dogsService: {
 			useClass: DogsService,
 			// lifetime: "TRANSIENT",
@@ -56,14 +63,13 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 		},
 	},
 
-	queryHandlers: [
-		GetCatsQueryHandler,
-		// { useClass: GetCatsQueryHandler, lifetime: "SCOPED" },
-	],
+	queryHandlers: [GetCatsQueryHandler],
 	controllers: [
-		// GetCatsController,
-		// GetCatsScopedController,
-		{ useClass: GetCatsController, lifetime: "SCOPED" },
-		{ useClass: GetCatsScopedController, lifetime: "SCOPED" },
+		CatsController,
+		CatsDecoratedController,
+		{
+			useClass: CatsScopedController,
+			lifetime: "SCOPED",
+		},
 	],
 });

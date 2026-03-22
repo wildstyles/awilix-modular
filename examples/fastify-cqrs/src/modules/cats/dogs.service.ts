@@ -1,4 +1,5 @@
 import type { Deps } from "./cats.module.js";
+import { DogsServiceResponse } from "./get-cats.dto.js";
 
 export class DogsService {
 	private readonly instanceId = Math.random().toString(36).substring(7);
@@ -12,7 +13,7 @@ export class DogsService {
 		return this.instanceId + " !!!";
 	}
 
-	getDogs() {
+	getDogs(): DogsServiceResponse {
 		return {
 			// ownersServiceId: this.ownersService.getInstanceId(),
 			dogsServiceId: this.getInstanceId(),

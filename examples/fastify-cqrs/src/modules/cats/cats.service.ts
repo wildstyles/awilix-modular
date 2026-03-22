@@ -1,11 +1,12 @@
 import type { Deps } from "./cats.module.js";
+import { CatsServiceResponse } from "./get-cats.dto.js";
 
 export class CatsService {
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
 	constructor(
-		// private readonly ownersService: Deps["ownersService"],
-		// private readonly owners1Service: Deps["owners1Service"],
+		private readonly ownersService: Deps["ownersService"],
+		private readonly owners1Service: Deps["owners1Service"],
 		private readonly dogsService: Deps["dogsService"],
 	) {}
 
@@ -13,13 +14,13 @@ export class CatsService {
 		return this.instanceId + " ???";
 	}
 
-	getCats() {
+	getCats(): CatsServiceResponse {
 		return {
 			catsServiceId: this.getInstanceId(),
 			dogsServiceId: this.dogsService.getInstanceId(),
-			// ownersServiceId: this.ownersService.getInstanceId(),
-			// ownersService1Id: this.owners1Service.getInstanceId(),
-			// ownersService: this.ownersService.getOwners(),
+			ownersServiceId: this.ownersService.getInstanceId(),
+			ownersService1Id: this.owners1Service.getInstanceId(),
+			ownersService: this.ownersService.getOwners(),
 			dogsService: this.dogsService.getDogs(),
 		};
 	}

@@ -267,14 +267,18 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
 	queryHandlers?: (ClassHandler | HandlerConstructor)[];
 	commandHandlers?: (ClassHandler | HandlerConstructor)[];
-	controllers?: (ClassController | ControllerConstructor<any>)[];
+	controllers?: (
+		| ClassController
+		| ControllerConstructor<any>
+		| Constructor<any>
+	)[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &
 	WithExports<Def> &
 	WithImports<Def>;
 
 type ClassController = {
-	useClass: ControllerConstructor<any>;
+	useClass: ControllerConstructor<any> | Constructor<any>;
 } & BuildResolverOptions<any>;
 
 export type DynamicModuleOptions = {
