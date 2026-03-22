@@ -22,6 +22,7 @@ A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix)
   - [Primitive Providers](#primitive-providers)
   - [Class Providers with DI Options](#class-providers-with-di-options)
   - [Configuring Provider Options](#configuring-provider-options)
+  - [Scoped Controllers](#scoped-controllers)
 - [Native ES Decorator-Based Routing](#native-es-decorator-based-routing)
 - [Dynamic Modules](#dynamic-modules)
 - [CQRS Pattern Support](#cqrs-pattern-support)
@@ -411,6 +412,48 @@ export const OrderModule = createStaticModule<OrderModuleDef>({
 
 > [!WARNING]
 > **Strict Mode:** Awilix strict mode is enabled by default, which prevents lifetime mismatches. A consumer (like a controller) cannot have a shorter lifetime than the providers it depends on. For example, a `SCOPED` controller cannot inject a `TRANSIENT` provider.
+
+### Scoped Controllers
+
+When using `SCOPED` lifetime for controllers with manual route registration, inject `resolveSelf` to get a fresh instance per request:
+
+```typescript
+import type { FastifyInstance } from "fastify";
+
+export class UserController {
+  private readonly instanceId = Math.random().toString(36).substring(7);
+
+  constructor(
+    private readonly userService: UserModuleDeps["userService"],
+    private readonly resolveSelf: () => UserController, // Injected automatically
+  ) {}
+
+  registerRoutes(app: FastifyInstance) {
+    app.get("/users/:id", async (req, res) => {
+      // Resolve request-scoped instance
+      const controller = this.resolveSelf();
+
+      const user = await controller.userService.getUser(req.params.id);
+      res.send({ user, instanceId: controller.instanceId });
+    });
+  }
+}
+
+// Configure scoped lifetime in module
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: { userService: UserService },
+  controllers: [
+    {
+      useClass: UserController,
+      lifetime: Lifetime.SCOPED, // Each request gets new instance
+    },
+  ],
+});
+```
+
+> [!NOTE]
+> For decorator-based controllers, `resolveSelf` is not needed—scoped resolution happens automatically per request.
 
 ## Native ES Decorator-Based Routing
 
