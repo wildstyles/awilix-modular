@@ -282,6 +282,7 @@ type ClassController = {
 } & BuildResolverOptions<any>;
 
 export type DynamicModuleOptions = {
+	// TODO: test it and use
 	registerControllers?: boolean;
 };
 

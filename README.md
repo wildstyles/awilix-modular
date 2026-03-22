@@ -5,6 +5,8 @@
 
 A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture to any Node.js application.
 
+🚀 **includes native ES decorators (TC39 Stage 3) for routing - no `reflect-metadata` or `experimentalDecorators` required!**
+
 ## Table of Contents
 
 - [Features](#features)
@@ -19,7 +21,11 @@ A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix)
   - [Factory Providers](#factory-providers)
   - [Primitive Providers](#primitive-providers)
   - [Class Providers with DI Options](#class-providers-with-di-options)
+  - [Configuring Provider Options](#configuring-provider-options)
+- [Native ES Decorator-Based Routing](#native-es-decorator-based-routing)
 - [Dynamic Modules](#dynamic-modules)
+- [CQRS Pattern Support](#cqrs-pattern-support)
+- [Circular Dependencies](#circular-dependencies)
 - [Why awilix-modular?](#why-awilix-modular)
   - [The Problem](#the-problem)
   - [The Solution](#the-solution)
@@ -30,7 +36,7 @@ A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix)
 - **Type-Safe Module System** - Complete type safety for each provider in module
 - **HTTP Framework Agnostic** - Works with Express, Fastify, Hono, Koa, or any other framework
 - **NestJS-Inspired Architecture** - Familiar module/controller/provider patterns
-- **Less Typing Boilerplate** - Define module dependencies once - reuse in all providers
+- **Less Import Boilerplate For Typing** - Define module dependencies once - reuse in all providers
 - **Lightweight** - Minimal overhead, built on proven Awilix foundation
 
 ## Installation
@@ -52,6 +58,9 @@ pnpm add awilix-modular awilix
 ## Quick Start
 
 This guide demonstrates building a modular application with `OrderModule` and `UserModule`, showing how modules import each other and share dependencies with full type safety.
+
+> [!TIP]
+> For more complete examples including CQRS patterns, circular dependencies, and framework integrations, see the [examples folder](./examples).
 
 ### 1. Create modules with their definitions
 
@@ -131,12 +140,19 @@ export const AppModule = createStaticModule<AppModuleDef>({
   imports: [UserModule],
 });
 
+// initialize your http framework instance
+const app = express();
+
 // Create DI context with root module and common dependencies
 DIContext.create(AppModule, {
+  framework: app,
   rootProviders: {
     logger: asClass(Logger).singleton(),
   },
 });
+
+// run your http framework service as usual
+app.listen(3000);
 
 // Extend CommonDependencies interface to make logger available globally
 declare module "awilix-modular" {
@@ -154,18 +170,21 @@ This includes module providers, imported module exports, and common dependencies
 import { UserModuleDeps } from "./user.module.ts";
 
 class UserService {
-  constructor(private readonly deps: UserModuleDeps) {
-    // All dependencies are type-safe and auto-completed
-    this.deps.emailService; // From UserModule providers
-    this.deps.orderService; // From OrderModule exports
-    this.deps.logger; // From global root providers
-  }
+  constructor(
+    // From UserModule providers
+    private readonly emailService: UserModuleDeps["emailService"],
+    // From OrderModule providers
+    private readonly orderService: UserModuleDeps["orderService"],
+    // From global root providers
+    private readonly logger: UserModuleDeps["logger"],
+  ) {}
 }
 ```
 
 ### 4. Use controllers with any framework
 
-Controllers are registered via callbacks, allowing integration with **any HTTP framework** (Express, Fastify, Hono, Koa, etc.).  
+Route definition happens within `registerRoutes` controller method.
+It allows integration with **any HTTP framework** (Express, Fastify, Hono, Koa, etc.).  
 This is especially useful for gradually migrating existing applications to a modular architecture without a full rewrite
 
 ```typescript
@@ -175,12 +194,12 @@ import { Controller } from "awilix-modular";
 import { UserModuleDeps } from "./user.module.ts";
 
 class UserController implements Controller {
-  constructor(private readonly deps: UserModuleDeps) {}
-
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+  // app is framework instance passed during DiContext initialization
   registerRoutes(app: Express) {
     // Direct framework API - no abstraction layer
     app.get("/users/:id", async (req: Request, res: Response) => {
-      const user = await this.deps.userService.getUser(req.params.id);
+      const user = await this.userService.getUser(req.params.id);
       res.json(user);
     });
   }
@@ -196,23 +215,6 @@ export const UserModule = createStaticModule<UserModuleDef>({
   },
   controllers: [UserController], // Register controller
 });
-
-// app.ts - Works with any framework (Express example)
-import express, { type Express } from "express";
-
-const app = express();
-DIContext.create<Express>(AppModule, {
-  rootProviders: {
-    logger: asClass(Logger).singleton(),
-  },
-  // Called for each controller once when modules are registered
-  onController: (ControllerClass, scope) => {
-    const controller = scope.build(ControllerClass); // Resolve with dependencies
-    controller.registerRoutes(app); // Pass your framework instance
-  },
-});
-
-app.listen(3000);
 ```
 
 ## Providers
@@ -241,7 +243,7 @@ type UserModuleDef = ModuleDef<{
 export const UserModule = createStaticModule<UserModuleDef>({
   name: "UserModule",
   providers: {
-    userService: UserService, // Dependencies auto-injected
+    userService: UserService,
     emailService: EmailService,
   },
 });
@@ -338,22 +340,112 @@ Customize Awilix behavior by providing options like `lifetime`:
 ```typescript
 import { Lifetime } from "awilix";
 
-type CacheModuleDef = ModuleDef<{
+type OrderModuleDef = ModuleDef<{
   providers: {
-    cacheService: CacheService;
+    orderService: OrderService;
   };
 }>;
 
-export const CacheModule = createStaticModule<CacheModuleDef>({
-  name: "CacheModule",
+export const OrderModule = createStaticModule<OrderModuleDef>({
+  name: "OrderModule",
   providers: {
-    cacheService: {
-      useClass: CacheService,
-      lifetime: Lifetime.SINGLETON,
+    orderService: {
+      useClass: OrderService,
+      lifetime: Lifetime.TRANSIENT,
     },
   },
+  controllers: [
+    {
+      useClass: OrderController,
+      lifetime: Lifetime.SCOPED,
+    },
+  ],
+  queryHandlers: [
+    {
+      useClass: CreateOrderHandler,
+      lifetime: Lifetime.SCOPED,
+    },
+  ],
 });
 ```
+
+### Configuring Provider Options
+
+Provider options (like `lifetime`, `injector`, etc.) can be configured at three levels, with more specific levels overriding general ones:
+
+1. **DiContext level** - Default options for all providers across all modules
+2. **Module level** (`providerOptions`) - Default options for all providers/controllers/handlers in the module
+3. **Provider level** - Options for a specific provider (highest priority)
+
+```typescript
+// 1. DiContext level - applies to everything
+DIContext.create(AppModule, {
+  providerOptions: { lifetime: Lifetime.SINGLETON }, // default for all
+});
+
+// 2. Module level - overrides DiContext defaults
+export const OrderModule = createStaticModule<OrderModuleDef>({
+  name: "OrderModule",
+  providerOptions: { lifetime: Lifetime.SCOPED }, // overrides DiContext
+  providers: {
+    orderService: OrderService, // uses SCOPED from module
+    cacheService: {
+      useClass: CacheService,
+      lifetime: Lifetime.SINGLETON, // overrides module (highest priority)
+    },
+  },
+  controllers: [
+    {
+      useClass: OrderController,
+      lifetime: Lifetime.SINGLETON, // overrides module
+    },
+  ],
+});
+```
+
+> [!NOTE]
+> **Default Lifetime:** All providers use `Lifetime.SINGLETON` by default, and it's recommended to keep it unless other behavior is needed.
+
+> [!IMPORTANT]
+> **Singleton Scope:** `SINGLETON` lifetime is scoped to the module, not application-wide. Each module gets its own singleton instance.
+
+> [!WARNING]
+> **Strict Mode:** Awilix strict mode is enabled by default, which prevents lifetime mismatches. A consumer (like a controller) cannot have a shorter lifetime than the providers it depends on. For example, a `SCOPED` controller cannot inject a `TRANSIENT` provider.
+
+## Native ES Decorator-Based Routing
+
+Use native ES decorators (Stage 3) to define routes directly in controller methods without `reflect-metadata` or `experimentalDecorators`.
+While decorators can introduce "magic" especially in business logic, they work well for infrastructure concerns like routing.
+
+```typescript
+import { controller, GET, POST, before, after } from "awilix-modular";
+import type { Express } from "express";
+import { UserModuleDeps } from "./user.module";
+import { authMiddleware, logMiddleware } from "./middlewares";
+
+@controller("/users") // adds a path prefix for each route. May be skipped if prefix is not needed
+@before(authMiddleware) // applies to all routes
+export class UserController {
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+
+  @GET("/:id")
+  @after(logMiddleware) // applies to this route only
+  async getUser(req, res) {
+    const user = await this.userService.getUser(req.params.id);
+
+    res.json(user);
+  }
+
+  @POST()
+  async createUser(req, res) {
+    const user = await this.userService.createUser(req.body);
+
+    res.status(201).json(user);
+  }
+}
+```
+
+Available decorators: `@controller`, `@GET`, `@POST`, `@PUT`, `@PATCH`, `@DELETE`, `@HEAD`, `@OPTIONS`, `@before`, `@after`
 
 ## Dynamic Modules
 
@@ -413,11 +505,230 @@ export const AppModule = createStaticModule<AppModuleDef>({
 });
 ```
 
+## CQRS Pattern Support
+
+Awilix-modular encourages and provides utilities for implementing the CQRS (Command Query Responsibility Segregation) pattern with type-safe query and command handlers.
+
+### Defining Query Handlers
+
+Create handlers that implement the `Handler<Contract>` interface with a unique key and executor function:
+
+```typescript
+import { type Contract, type Handler } from "awilix-modular";
+import type { UserModuleDeps } from "./user.module";
+
+// Define payload and response types
+type Payload = { userId: string };
+type Response = { id: string; role: "admin" | "user" };
+
+export const GET_USER_QUERY = "users/get-user";
+
+export class GetUserQueryHandler implements Handler<
+  typeof GetUserQueryHandler.contract
+> {
+  readonly key = GET_USER_QUERY;
+  static contract: Contract<typeof GET_USER_QUERY, Payload, Response>;
+
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+
+  async executor(payload: Payload): Promise<Response> {
+    return this.userService.findById(payload.userId);
+  }
+}
+```
+
+### Registering Handlers in Modules
+
+Add query handlers to the module's `queryHandlers` array and export their contracts:
+
+```typescript
+// Export module's query contracts (use union for multiple handlers)
+export type UserModuleQueryContracts =
+  | typeof GetUserQueryHandler.contract
+  | typeof GetUserProfileHandler.contract;
+
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: {
+    userService: UserService,
+  },
+  queryHandlers: [GetUserQueryHandler, GetUserProfileHandler],
+});
+```
+
+### Initializing the Query Bus
+
+Set up the query bus during application bootstrap and register handlers using the `onQueryHandler` hook:
+
+```typescript
+import { type Bus, DIContext, initializeBus } from "awilix-modular";
+import { AppModule, type QueryContracts } from "./modules";
+import fastify from "fastify";
+
+const app = fastify();
+const queryBus = initializeBus<QueryContracts>();
+
+// Decorate Fastify instance with query bus to access bus through app in controllers
+app.decorate("queryBus", queryBus);
+
+DIContext.create(AppModule, {
+  framework: app,
+  onQueryHandler: (resolveHandler) => {
+    const { key } = resolveHandler();
+    app.queryBus.register(key, (...args) => resolveHandler().executor(...args));
+  },
+});
+
+// Type augmentation for TypeScript
+declare module "fastify" {
+  interface FastifyInstance {
+    queryBus: Bus<QueryContracts>;
+  }
+}
+```
+
+### Executing Queries
+
+Execute queries from controllers using the type-safe query bus:
+
+```typescript
+import type { FastifyInstance } from "fastify";
+
+class UserController {
+  registerRoutes(app: FastifyInstance) {
+    app.get("/users/:id", async (req, res) => {
+      // full typesafety without depending on implementation
+      const user = await app.queryBus.execute("users/get-user", {
+        userId: req.params.id,
+      });
+      res.send(user);
+    });
+  }
+}
+```
+
+> [!TIP]
+> The same pattern applies to command handlers using `commandHandlers` and `onCommandHandler`. See the [fastify-cqrs example](./examples/fastify-cqrs) for a complete implementation.
+
+## Circular Dependencies
+
+Awilix-modular supports circular dependencies between providers and modules using `allowCircular` and `forwardRef` utilities.
+
+### Within Same Module
+
+When providers within the same module depend on each other, use `allowCircular: true` for one of provider:
+
+```typescript
+// dogs.service.ts
+export class DogsService {
+  constructor(private readonly catsService: Deps["catsService"]) {}
+}
+
+// cats.service.ts
+export class CatsService {
+  constructor(private readonly dogsService: Deps["dogsService"]) {}
+}
+
+// module.ts
+export const AnimalModule = createStaticModule<AnimalModuleDef>({
+  name: "AnimalModule",
+  providers: {
+    dogsService: DogsService,
+    catsService: {
+      useClass: CatsService,
+      allowCircular: true, // Enables circular dependency resolution
+    },
+  },
+});
+```
+
+> [!NOTE]
+> ✨ Unlike NestJS, no special decorators or annotations are needed in the providers themselves. In NestJS, you'd need `@Inject(forwardRef(() => DogsService))` in the constructor. With awilix-modular, circular dependencies are handled purely at the module level—services remain clean and framework-agnostic.
+
+### Between Modules
+
+When modules import each other, use `forwardRef` and `ModuleRef` type:
+
+```typescript
+// cats.module.ts
+import { OwnersModule } from "./owners.module";
+
+export type CatsModuleDef = ModuleDef<{
+  providers: {
+    catsService: CatsService;
+  };
+  imports: [typeof OwnersModule]; // typeof as usual
+  exportKeys: "catsService";
+}>;
+
+export const CatsModule = createStaticModule<CatsModuleDef>({
+  name: "CatsModule",
+  imports: [OwnersModule],
+  providers: { catsService: CatsService },
+  exports: { catsService: CatsService },
+});
+
+// owners.module.ts
+import { forwardRef, type ModuleRef } from "awilix-modular";
+import { CatsModule, type CatsModuleDef } from "./cats.module";
+
+export type OwnersModuleDef = ModuleDef<{
+  providers: { ownersService: OwnersService };
+  imports: [ModuleRef<CatsModuleDef>]; // Use ModuleRef for circular imports
+}>;
+
+// Explicit type annotation required for breaking circular type ref
+export const OwnersModule: StaticModule<OwnersModuleDef> =
+  createStaticModule<OwnersModuleDef>({
+    name: "OwnersModule",
+    imports: [forwardRef(() => CatsModule)], // Wrap with forwardRef
+    providers: { ownersService: OwnersService },
+    exports: { ownersService: OwnersService },
+  });
+```
+
+### Between Providers of Different Cyclic Modules
+
+When providers from circularly dependent modules depend on each other, combine both approaches:
+
+```typescript
+// cats.module.ts
+export const CatsModule = createStaticModule<CatsModuleDef>({
+  name: "CatsModule",
+  imports: [OwnersModule],
+  providers: {
+    catsService: {
+      useClass: CatsService,
+      allowCircular: true, // Required for cross-module circular dependency
+    },
+  },
+  exports: {
+    catsService: {
+      useClass: CatsService,
+      allowCircular: true, // Also required in exports
+    },
+  },
+});
+
+// owners.module.ts
+export const OwnersModule: StaticModule<OwnersModuleDef> =
+  createStaticModule<OwnersModuleDef>({
+    name: "OwnersModule",
+    imports: [forwardRef(() => CatsModule)],
+    providers: {
+      ownersService: OwnersService, // Uses catsService from CatsModule
+    },
+  });
+```
+
+> [!WARNING]
+> While circular dependencies are supported, they may indicate architectural issues. Consider refactoring to extract shared dependencies into a separate module when possible.
+
 ## Why awilix-modular?
 
 ### The Problem
 
-In NestJS, every service must declare its dependencies repeatedly in the constructor. As your application grows, you end up writing the same type declarations over and over:
+In NestJS, every service must import its dependencies repeatedly. As your application grows, you end up writing the same type declarations over and over:
 
 ```typescript
 // user.service.ts
@@ -441,22 +752,23 @@ class UserService {
 
 // payment.service.ts
 import { Injectable } from "@nestjs/common";
-import { Logger } from "./logger.service";
-import { ConfigService } from "./config.service";
-import { DatabaseService } from "./database.service";
-import { OrderService } from "./order.service";
+import { Logger } from "./logger.service"; // repeated
+import { ConfigService } from "./config.service"; // repeated
+import { DatabaseService } from "./database.service"; // repeated
+import { OrderService } from "./order.service"; // repeated
 
 @Injectable()
 class OrderService {
   constructor(
-    private readonly logger: Logger, // Repeated
-    private readonly config: ConfigService, // Repeated
-    private readonly database: DatabaseService, // Repeated
-    private readonly orderService: OrderService, // Repeated
+    private readonly logger: Logger,
+    private readonly config: ConfigService,
+    private readonly database: DatabaseService,
+    private readonly orderService: OrderService,
   ) {}
 }
 ```
 
+> [!NOTE]
 > **Every service repeats the same imports and type declarations!**
 
 ### The Solution
@@ -499,28 +811,32 @@ export const UserModule = createStaticModule<UserModuleDef>({
 });
 
 // user.service.ts
+// single import. type knows every module dependency
 import { UserModuleDeps } from "./user.module";
 
 class UserService {
-  constructor(private readonly deps: UserModuleDeps) {} // Single import!
-}
-
-// payment.service.ts
-import { UserModuleDeps } from "./user.module";
-
-class PaymentService {
-  constructor(private readonly deps: UserModuleDeps) {} // Single import!
-}
-
-// notification.service.ts
-import { UserModuleDeps } from "./user.module";
-
-class NotificationService {
-  constructor(private readonly deps: UserModuleDeps) {} // Single import!
+  constructor(
+    private readonly logger: UserModuleDeps["logger"],
+    private readonly config: UserModuleDeps["config"],
+    private readonly database: UserModuleDeps["database"],
+    private readonly orderService: UserModuleDeps["orderService"],
+  ) {}
 }
 ```
 
-> **Define module provider dependencies once during module definition**
+**Even less boilerplate with Proxy Injection Mode!**
+
+```typescript
+// user.service.ts
+import { UserModuleDeps } from "./user.module";
+
+class UserService {
+  constructor(private readonly deps: UserModuleDeps) {}
+}
+```
+
+> [!TIP]
+> **Define module provider dependencies once during module definition and use it's type**
 
 ### Philosophy
 
@@ -528,4 +844,6 @@ class NotificationService {
 
 **Configuration in Module, Not Provider**: DI options(Injectable decorator) are configured at the module level, keeping provider files clean and focused on business logic.
 
-**Less Boilerplate**: No experimental decorators, no reflection, no repeated type declarations. Just clean, maintainable code.
+**Less Boilerplate**: Define dependencies once in your module, not repeatedly in every constructor. No reflection, no repeated type declarations.
+
+**Future-Proof**: Built on native ES Stage 3 decorators and standard JavaScript. no experimental features or polyfills required.
