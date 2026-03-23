@@ -144,10 +144,15 @@ describe("DIContext Performance", () => {
 		const duration = measure(
 			"Register 250 modules (10 infra + 40 domain + 200 feature), 3 levels deep",
 			() => {
-				DIContext.create({
-					name: "Root",
-					imports: [...baseFeatureModules, ...advancedFeatureModules],
-				});
+				DIContext.create(
+					{
+						name: "Root",
+						imports: [...baseFeatureModules, ...advancedFeatureModules],
+					},
+					{
+						framework: {},
+					},
+				);
 			},
 		);
 

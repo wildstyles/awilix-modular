@@ -20,6 +20,10 @@ import {
 	forwardRef,
 	type ModuleRef,
 } from "../lib/di-context.types.js";
+import type {
+	ExpressFramework,
+	ExpressHandler,
+} from "../lib/framework.types.js";
 
 describe("DIContext", () => {
 	class ControllerBase implements Controller {
@@ -47,6 +51,11 @@ describe("DIContext", () => {
 		config: asValue({ env: "test" }),
 	};
 	const rootResolversCount = Object.keys(rootProviders).length;
+	const mockedExpress = {
+		get: vi.fn(),
+		post: vi.fn(),
+		put: vi.fn(),
+	};
 
 	function registerModule<Extends>(
 		module: Partial<AnyModule>,
@@ -57,6 +66,7 @@ describe("DIContext", () => {
 				...module,
 			},
 			{
+				framework: mockedExpress,
 				rootProviders,
 				containerOptions: {
 					injectionMode: "PROXY",
@@ -164,6 +174,7 @@ describe("DIContext", () => {
 
 			expect(() => {
 				DIContext.create(ModuleC, {
+					framework: mockedExpress,
 					rootProviders,
 					containerOptions: {
 						injectionMode: "PROXY",
@@ -593,6 +604,7 @@ describe("DIContext", () => {
 					},
 				},
 				{
+					framework: mockedExpress,
 					rootProviders,
 					containerOptions: {
 						injectionMode: "PROXY",
@@ -696,6 +708,29 @@ describe("DIContext", () => {
 	describe("Controller Registration", () => {
 		class TestController extends ControllerBase {}
 		class AnotherController extends ControllerBase {}
+
+		it("should register controllers with mock Express framework", () => {
+			class ApiController extends ControllerBase {
+				registerRoutes(framework: ExpressFramework) {
+					framework.get("/api/users", () => {});
+					framework.post("/api/users", () => {});
+				}
+			}
+
+			const { scope } = registerModule({
+				name: "ApiModule",
+				controllers: [ApiController],
+			});
+
+			expect(mockedExpress.get).toHaveBeenCalledWith(
+				"/api/users",
+				expect.any(Function),
+			);
+			expect(mockedExpress.post).toHaveBeenCalledWith(
+				"/api/users",
+				expect.any(Function),
+			);
+		});
 
 		it("should throw an error when a module has duplicate controllers in its array", () => {
 			expect(() => {
