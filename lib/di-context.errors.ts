@@ -77,6 +77,15 @@ export class ProviderNameConflictError extends Error {
 	}
 }
 
+export class RootProviderNameConflictError extends Error {
+	constructor(moduleName: string, conflictingKeys: string[]) {
+		super(
+			`Module "${moduleName}" has provider name conflicts with root providers: ${conflictingKeys.join(", ")}. Root providers are global and cannot be overridden.`,
+		);
+		this.name = "RootProviderNameConflictError";
+	}
+}
+
 export class CircularModuleDependencyError extends Error {
 	constructor(moduleName: string, chain: string[]) {
 		super(

@@ -1,5 +1,5 @@
 import type { Deps } from "./cats.module.js";
-import { CatsServiceResponse } from "./get-cats.dto.js";
+import type { CatsServiceResponse } from "./get-cats.dto.js";
 
 export class CatsService {
 	private readonly instanceId = Math.random().toString(36).substring(7);

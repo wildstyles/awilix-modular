@@ -1,37 +1,50 @@
 import {
 	type AwilixContainer,
-	asValue,
 	type BuildResolverOptions,
 	Lifetime,
 } from "awilix";
-
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import * as ERRORS from "../lib/di-context.errors.js";
-import { DIContext, type ModuleScopeTree } from "../lib/di-context.js";
-import type {
-	AnyModule,
-	Controller,
-	ModuleDef,
-} from "../lib/di-context.types.js";
 import {
+	DIContext,
+	type DiContextOptions,
+	type ModuleScopeTree,
+} from "../lib/di-context.js";
+import {
+	type AnyModule,
+	type Controller,
 	createStaticModule,
 	type ForwardRef,
 	forwardRef,
+	type ModuleDef,
 	type ModuleRef,
 } from "../lib/di-context.types.js";
-import type {
-	ExpressFramework,
-	ExpressHandler,
-} from "../lib/framework.types.js";
+import type { ExpressFramework } from "../lib/framework.types.js";
+
+// Test-only type: Override resolve to return 'any' for convenience
+type TestContainer = Omit<AwilixContainer, "resolve"> & {
+	resolve<T = any>(name: string | symbol): T;
+};
+
+type TestModuleScopeTree = Omit<ModuleScopeTree, "scope" | "importedScopes"> & {
+	scope: TestContainer;
+	importedScopes: Map<string, TestModuleScopeTree>;
+};
 
 describe("DIContext", () => {
-	class ControllerBase implements Controller {
-		registerRoutes() {}
+	class ControllerBase implements Controller<ExpressFramework> {
+		registerRoutes(framework: ExpressFramework) {}
 	}
 
 	class TestableBase {
-		constructor(protected deps?: any) {}
+		public resolveCount: number;
+		public instanceId: number;
+
+		constructor(protected deps?: any) {
+			this.resolveCount = 1;
+			this.instanceId = Math.random();
+		}
 
 		getDeps() {
 			return this.deps;
@@ -47,8 +60,8 @@ describe("DIContext", () => {
 	}
 
 	const rootProviders = {
-		logger: asValue({ info: vi.fn(), error: vi.fn() }),
-		config: asValue({ env: "test" }),
+		logger: { info: vi.fn(), error: vi.fn() },
+		config: { env: "test" },
 	};
 	const rootResolversCount = Object.keys(rootProviders).length;
 	const mockedExpress = {
@@ -57,9 +70,10 @@ describe("DIContext", () => {
 		put: vi.fn(),
 	};
 
-	function registerModule<Extends>(
+	function registerModule(
 		module: Partial<AnyModule>,
-	): ModuleScopeTree<AwilixContainer<{ [k: string]: TestableBase & Extends }>> {
+		options?: Partial<DiContextOptions>,
+	): TestModuleScopeTree {
 		return DIContext.create(
 			{
 				name: "AnyModule",
@@ -71,9 +85,95 @@ describe("DIContext", () => {
 				containerOptions: {
 					injectionMode: "PROXY",
 				},
+				...options,
 			},
 		);
 	}
+
+	describe("Root Providers", () => {
+		it("should support all provider types and be singletons across modules", () => {
+			class DatabaseConfig extends TestableBase {}
+
+			const rootProviders = {
+				// Primitives
+				apiUrl: "https://api.example.com",
+				timeout: 3000,
+				isProduction: false,
+				// Plain object
+				appConfig: { env: "test", debug: true },
+				// Class constructor (singleton by default)
+				singletonService: class SingletonService extends TestableBase {},
+				// Class provider with TRANSIENT lifetime
+				transientService: {
+					useClass: class TransientService extends TestableBase {},
+					lifetime: Lifetime.TRANSIENT,
+				},
+				database: {
+					provide: DatabaseConfig,
+					inject: ["apiUrl", "timeout"],
+					useFactory: (apiUrl: string, timeout: number) =>
+						new DatabaseConfig({ apiUrl, timeout }),
+				},
+			};
+
+			const { scope, importedScopes } = registerModule(
+				{
+					imports: [
+						{
+							name: "ModuleA",
+							providers: {
+								serviceA: class ServiceA extends TestableBase {},
+							},
+						},
+						{
+							name: "ModuleB",
+							providers: {
+								serviceB: class ServiceB extends TestableBase {},
+							},
+						},
+					],
+					providers: {
+						appService: class AppService extends TestableBase {},
+					},
+				},
+				{ rootProviders },
+			);
+
+			const moduleA = importedScopes.get("ModuleA");
+
+			// Primitives
+			expect(scope.resolve("apiUrl")).toBe("https://api.example.com");
+			expect(scope.resolve("timeout")).toBe(3000);
+			expect(scope.resolve("isProduction")).toBe(false);
+			// Plain object
+			expect(scope.resolve("appConfig")).toEqual({ env: "test", debug: true });
+
+			// Factory provider
+			const database = scope.resolve<DatabaseConfig>("database");
+			expect(database).toBeInstanceOf(DatabaseConfig);
+			expect(database.getDeps().apiUrl).toBe("https://api.example.com");
+			expect(database.getDeps().timeout).toBe(3000);
+
+			// Transient provider - different instances
+			const transient1 = moduleA?.scope.resolve("transientService");
+			const transient2 = moduleA?.scope.resolve("transientService");
+			expect(transient1.instanceId).not.toBe(transient2.instanceId);
+
+			// Singleton across all module scopes
+			const singletonFromModuleA = moduleA?.scope.resolve("singletonService");
+			const singletonFromModuleB = importedScopes
+				.get("ModuleB")
+				?.scope.resolve("singletonService");
+
+			expect(singletonFromModuleA).toBe(singletonFromModuleB);
+
+			// Module providers can access all root providers
+			const serviceA = moduleA?.scope.resolve("serviceA");
+			expect(serviceA.getDepKeys().length).toBe(
+				Object.keys(rootProviders).length + 1,
+			);
+		});
+	});
 
 	describe("Ensure that module interactions/declarations are correct", () => {
 		it("should throw an error when a module has duplicate imports", () => {
@@ -109,6 +209,18 @@ describe("DIContext", () => {
 					},
 				});
 			}).toThrow(ERRORS.ProviderNameConflictError);
+		});
+
+		it("should throw an error when a module has provider name conflicts with root providers", () => {
+			expect(() => {
+				registerModule({
+					name: "MainModule",
+					providers: {
+						logger: class Logger extends TestableBase {},
+						config: class Config extends TestableBase {},
+					},
+				});
+			}).toThrow(ERRORS.RootProviderNameConflictError);
 		});
 
 		it("should throw an error when factory provider depends on non-existent provider", () => {
@@ -173,13 +285,7 @@ describe("DIContext", () => {
 			ModuleA.imports = [ModuleB];
 
 			expect(() => {
-				DIContext.create(ModuleC, {
-					framework: mockedExpress,
-					rootProviders,
-					containerOptions: {
-						injectionMode: "PROXY",
-					},
-				});
+				registerModule(ModuleC);
 			}).toThrow(ERRORS.CircularModuleDependencyError);
 		});
 
@@ -577,10 +683,10 @@ describe("DIContext", () => {
 			const LoggerModule: AnyModule = {
 				name: "LoggerModule",
 				providers: {
-					logger: class Logger extends TestableBase {},
+					loggerService: class Logger extends TestableBase {},
 				},
 				exports: {
-					logger: class Logger extends TestableBase {},
+					loggerService: class Logger extends TestableBase {},
 				},
 			};
 
@@ -588,41 +694,32 @@ describe("DIContext", () => {
 				name: "ConfigModule",
 				imports: [LoggerModule],
 				providers: {
-					config: class Config extends TestableBase {},
+					configService: class Config extends TestableBase {},
 				},
 				exports: {
-					config: class Config extends TestableBase {},
+					configService: class Config extends TestableBase {},
 				},
 			};
 
-			const { importedScopes } = DIContext.create(
-				{
-					name: "AppModule",
-					imports: [LoggerModule, ConfigModule],
-					providers: {
-						appService: class AppService extends TestableBase {},
-					},
+			const { importedScopes } = registerModule({
+				name: "AppModule",
+				imports: [LoggerModule, ConfigModule],
+				providers: {
+					appService: class AppService extends TestableBase {},
 				},
-				{
-					framework: mockedExpress,
-					rootProviders,
-					containerOptions: {
-						injectionMode: "PROXY",
-					},
-				},
-			);
+			});
 
 			const loggerModule = importedScopes.get("LoggerModule");
 			const configModule = importedScopes.get("ConfigModule");
 
 			expect(loggerModule?.name).toBe("LoggerModule");
 			expect(loggerModule?.scope).toBeDefined();
-			expect(loggerModule?.scope.hasRegistration("logger")).toBe(true);
+			expect(loggerModule?.scope.hasRegistration("loggerService")).toBe(true);
 
 			expect(configModule?.name).toBe("ConfigModule");
 			expect(configModule?.scope).toBeDefined();
 			expect(configModule?.importedScopes.has("LoggerModule")).toBe(true);
-			expect(configModule?.scope.hasRegistration("config")).toBe(true);
+			expect(configModule?.scope.hasRegistration("configService")).toBe(true);
 		});
 	});
 
@@ -748,7 +845,7 @@ describe("DIContext", () => {
 						name: "DynamicModule",
 						controllers: [TestController],
 						providers: {
-							config: config.value,
+							configValue: config.value,
 						},
 					};
 				},

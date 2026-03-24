@@ -1,15 +1,13 @@
 import { createStaticModule, type ModuleDef } from "awilix-modular";
 
 import { OwnersModule } from "@/modules/owners/owners.module.js";
+import { CatsController } from "./cats.controller.js";
 import { CatsService } from "./cats.service.js";
+import { CatsDecoratedController } from "./cats-decorated.controller.js";
+import { CatsScopedController } from "./cats-scoped.controller.js";
 import { DogsService } from "./dogs.service.js";
-
 import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
 import { GetCatsService } from "./get-cats.service.js";
-
-import { CatsScopedController } from "./cats-scoped.controller.js";
-import { CatsDecoratedController } from "./cats-decorated.controller.js";
-import { CatsController } from "./cats.controller.js";
 
 export type CatsModuleQueryContracts = typeof GetCatsQueryHandler.contract;
 

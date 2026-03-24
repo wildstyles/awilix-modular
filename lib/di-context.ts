@@ -27,12 +27,12 @@ import {
 } from "./di-context.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
-interface DiContextOptions {
+export interface DiContextOptions {
 	framework: unknown;
 	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	containerOptions?: ContainerOptions;
-	rootProviders?: Record<string, Resolver<any>>;
+	rootProviders?: Record<string, AnyProvider>;
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 }
 
@@ -42,12 +42,15 @@ export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
 	importedScopes: Map<string, ModuleScopeTree>;
 }
 
+const ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL = Symbol("rootProvidersResolverMap");
+
 export class DIContext {
 	private readonly forwardRefModules = new WeakSet<M>();
 	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
 	private readonly sorter = new ProviderDependencySorter();
 	private readonly controllerProcessor: ControllerProcessor;
 	private readonly options: DiContextOptions;
+	private readonly rootContainer: AwilixContainer;
 
 	private constructor(options: DiContextOptions) {
 		this.options = {
@@ -67,6 +70,9 @@ export class DIContext {
 			this.options.framework,
 			this.options.providerOptions || {},
 		);
+
+		this.rootContainer = createContainer(this.options.containerOptions);
+		this.initializeRootProviders();
 	}
 
 	static create(module: M, options: DiContextOptions): ModuleScopeTree {
@@ -81,10 +87,49 @@ export class DIContext {
 
 	private createContainerWithRootProviders(): AwilixContainer {
 		const container = createContainer(this.options.containerOptions);
-		// TODO: ensure they can be singleton throuout app
-		container.register(this.options.rootProviders || {});
+		container.register(
+			this.rootContainer.resolve(ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL) as Record<
+				string,
+				Resolver<any>
+			>,
+		);
 
 		return container;
+	}
+
+	private initializeRootProviders(): void {
+		const rootProvidersModule: M = {
+			name: "RootProvidersModule",
+			providers: this.options.rootProviders || {},
+		};
+
+		Object.entries(this.sorter.sortByDependencies(rootProvidersModule)).forEach(
+			([key, provider]) => {
+				this.rootContainer.register({
+					[key]: this.resolveProvider({
+						key,
+						provider,
+						resolutionScope: this.rootContainer,
+						module: rootProvidersModule,
+					}),
+				});
+			},
+		);
+
+		const wrappedResolvers = Object.entries(
+			rootProvidersModule.providers || {},
+		).reduce<Record<string, Resolver<any>>>((acc, [key, provider]) => {
+			acc[key] = asFunction(
+				() => this.rootContainer.resolve(key),
+				this.extractResolverOptions(rootProvidersModule, provider),
+			);
+
+			return acc;
+		}, {});
+
+		this.rootContainer.register({
+			[ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL]: asValue(wrappedResolvers),
+		});
 	}
 
 	private registerModuleWithScope(
@@ -181,6 +226,16 @@ export class DIContext {
 		wrapForExport?: boolean;
 	}): Resolver<any> {
 		if (isPrimitive(provider)) {
+			return asValue(provider);
+		}
+
+		// Handle plain objects as values (not class instances or providers)
+		if (
+			typeof provider === "object" &&
+			!isCostructorProvider(provider) &&
+			!isFactoryProvider(provider) &&
+			!isClassProvider(provider)
+		) {
 			return asValue(provider);
 		}
 
@@ -373,16 +428,25 @@ export class DIContext {
 
 	private ensureNoProviderNameConflicts(m: M) {
 		const moduleProviderKeys = Object.keys(m.providers || {});
-		const importedProviderKeys = this.resolveImports(m).flatMap((importItem) =>
-			Object.keys(importItem.exports || {}),
-		);
+		const rootProviderKeys = Object.keys(this.options.rootProviders || {});
 
-		const conflicts = importedProviderKeys.filter((key) =>
+		const rootConflicts = rootProviderKeys.filter((key) =>
 			moduleProviderKeys.includes(key),
 		);
 
-		if (conflicts.length > 0) {
-			throw new ERRORS.ProviderNameConflictError(m.name, conflicts);
+		if (rootConflicts.length > 0) {
+			throw new ERRORS.RootProviderNameConflictError(m.name, rootConflicts);
+		}
+
+		const importedProviderKeys = this.resolveImports(m).flatMap((importItem) =>
+			Object.keys(importItem.exports || {}),
+		);
+		const importConflicts = importedProviderKeys.filter((key) =>
+			moduleProviderKeys.includes(key),
+		);
+
+		if (importConflicts.length > 0) {
+			throw new ERRORS.ProviderNameConflictError(m.name, importConflicts);
 		}
 	}
 

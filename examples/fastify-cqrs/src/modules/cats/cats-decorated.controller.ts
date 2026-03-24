@@ -1,11 +1,10 @@
 import { GET } from "awilix-modular";
-
+import type { Deps } from "./cats.module.js";
 import {
 	GetCatsQuerySchema,
+	type GetCatsResponse,
 	GetCatsResponseSchema,
-	GetCatsResponse,
 } from "./get-cats.dto.js";
-import { Deps } from "./cats.module.js";
 
 export class CatsDecoratedController {
 	private readonly instanceId = Math.random().toString(36).substring(7);

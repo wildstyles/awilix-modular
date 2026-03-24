@@ -79,7 +79,8 @@ export type AnyProvider =
 	| FactoryProvider<any, any, readonly string[], false>
 	| ClassProvider<any>
 	| ConstructorProvider<any>
-	| PrimitiveProvider;
+	| PrimitiveProvider
+	| UnknownRecord;
 
 // ============================================================================
 // Typed module definition with deps

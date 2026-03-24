@@ -21,7 +21,6 @@ export type OwnersModuleDef = ModuleDef<{
 
 export type Deps = OwnersModuleDef["deps"];
 
-// TODO: why explicit StaticModule is needed
 export const OwnersModule: StaticModule<OwnersModuleDef> =
 	createStaticModule<OwnersModuleDef>({
 		name: "OwnersModule",
