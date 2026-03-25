@@ -253,15 +253,8 @@ type WithImports<Def extends StaticModuleDef> = 0 extends 1 & Def
 			: { imports: WithForwardRefImports<Def["imports"]> }
 		: { imports?: never };
 
-// export type AnyModule = Omit<
-// 	StaticModule<any>,
-// 	"providers" | "exports" | "imports"
-// > & {
-// 	providers?: Record<string, AnyProvider>;
-// 	exports?: Record<string, AnyProvider>;
-// 	imports?: (AnyModule | ForwardRef)[];
-// };
-export type AnyModule = StaticModule<any>;
+export type AnyModule = StaticModule<any> & DynamicModuleOptions;
+
 type AnyModuleRef = ModuleRef<any>;
 
 export type StaticModule<Def extends StaticModuleDef> = {
@@ -283,7 +276,6 @@ type ClassController = {
 } & BuildResolverOptions<any>;
 
 export type DynamicModuleOptions = {
-	// TODO: test it and use
 	registerControllers?: boolean;
 };
 
@@ -375,7 +367,10 @@ export function createDynamicModule<TDef extends DynamicModuleDef>(
 ): DynamicModule<TDef> {
 	return {
 		forRoot(config, options) {
-			return factory(config, options);
+			return {
+				...factory(config, options),
+				registerControllers: options?.registerControllers ?? false,
+			};
 		},
 	};
 }

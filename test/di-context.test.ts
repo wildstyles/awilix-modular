@@ -4,7 +4,7 @@ import {
 	Lifetime,
 } from "awilix";
 import { describe, expect, it, vi } from "vitest";
-
+import type { Handler } from "../lib/cqrs/cqrs.types.js";
 import * as ERRORS from "../lib/di-context.errors.js";
 import {
 	DIContext,
@@ -13,14 +13,13 @@ import {
 } from "../lib/di-context.js";
 import {
 	type AnyModule,
-	type Controller,
+	createFactoryProvider,
 	createStaticModule,
 	type ForwardRef,
 	forwardRef,
 	type ModuleDef,
 	type ModuleRef,
 } from "../lib/di-context.types.js";
-import type { ExpressFramework } from "../lib/framework.types.js";
 
 // Test-only type: Override resolve to return 'any' for convenience
 type TestContainer = Omit<AwilixContainer, "resolve"> & {
@@ -33,10 +32,6 @@ type TestModuleScopeTree = Omit<ModuleScopeTree, "scope" | "importedScopes"> & {
 };
 
 describe("DIContext", () => {
-	class ControllerBase implements Controller<ExpressFramework> {
-		registerRoutes(framework: ExpressFramework) {}
-	}
-
 	class TestableBase {
 		public resolveCount: number;
 		public instanceId: number;
@@ -223,6 +218,17 @@ describe("DIContext", () => {
 			}).toThrow(ERRORS.RootProviderNameConflictError);
 		});
 
+		it("should throw an error when provider type is unsupported", () => {
+			expect(() => {
+				registerModule({
+					name: "InvalidProviderModule",
+					providers: {
+						invalidService: () => "" as any,
+					},
+				});
+			}).toThrow(ERRORS.UnsupportedProviderTypeError);
+		});
+
 		it("should throw an error when factory provider depends on non-existent provider", () => {
 			expect(() => {
 				registerModule({
@@ -356,12 +362,10 @@ describe("DIContext", () => {
 			ModuleA.imports = [forwardRef(() => ModuleB)];
 
 			// Should not throw with forwardRef
-			const { scope, importedScopes } = registerModule<Circrular>(ModuleA);
+			const { scope, importedScopes } = registerModule(ModuleA);
 
 			const serviceA = scope.resolve("serviceA");
-			const serviceB: ServiceB | undefined = importedScopes
-				.get("ModuleB")
-				?.scope.resolve("serviceB");
+			const serviceB = importedScopes.get("ModuleB")?.scope.resolve("serviceB");
 			expect(serviceA?.call()).toBe("Service B called");
 			expect(serviceB?.call()).toBe("Service A called");
 		});
@@ -463,16 +467,6 @@ describe("DIContext", () => {
 	});
 
 	describe("Simple Provider Registration", () => {
-		it("should register a module with providers within one scope", () => {
-			const { scope } = registerModule({
-				providers: {
-					testService: class TestService extends TestableBase {},
-				},
-			});
-
-			expect(scope.resolve("testService").getName()).toBe("TestService");
-		});
-
 		it("should register a ClassConstructor directly with default context settings", () => {
 			const { scope } = registerModule({
 				providers: {
@@ -527,6 +521,8 @@ describe("DIContext", () => {
 					port: 3000,
 					isProduction: true,
 					debugMode: false,
+					nullValue: null,
+					undefinedValue: undefined,
 				},
 			});
 
@@ -534,6 +530,9 @@ describe("DIContext", () => {
 			expect(scope.resolve("apiUrl")).toBe("https://api.example.com");
 			expect(scope.resolve("isProduction")).toBe(true);
 			expect(scope.resolve("debugMode")).toBe(false);
+			expect(scope.resolve("nullValue")).toBe(null);
+			// undefined provider should not be registered
+			expect(scope.registrations.undefinedValue).toBeUndefined();
 		});
 
 		it("should register primitives alongside class providers", () => {
@@ -802,85 +801,116 @@ describe("DIContext", () => {
 		});
 	});
 
-	describe("Controller Registration", () => {
-		class TestController extends ControllerBase {}
-		class AnotherController extends ControllerBase {}
+	describe("Handler Registration", () => {
+		class TestQueryHandler extends TestableBase implements Handler<any> {
+			key = "query-key";
+			async executor() {}
+		}
+		class TestCommandHandler extends TestableBase implements Handler<any> {
+			key = "command-key";
+			async executor() {}
+		}
 
-		it("should register controllers with mock Express framework", () => {
-			class ApiController extends ControllerBase {
-				registerRoutes(framework: ExpressFramework) {
-					framework.get("/api/users", () => {});
-					framework.post("/api/users", () => {});
-				}
-			}
+		it("should register handlers and call it's callbacks", () => {
+			const onQueryHandler = vi.fn();
+			const onCommandHandler = vi.fn();
 
-			const { scope } = registerModule({
-				name: "ApiModule",
-				controllers: [ApiController],
-			});
-
-			expect(mockedExpress.get).toHaveBeenCalledWith(
-				"/api/users",
-				expect.any(Function),
-			);
-			expect(mockedExpress.post).toHaveBeenCalledWith(
-				"/api/users",
-				expect.any(Function),
-			);
-		});
-
-		it("should throw an error when a module has duplicate controllers in its array", () => {
-			expect(() => {
-				registerModule({
-					name: "DuplicateControllerModule",
-					controllers: [TestController, TestController],
-				});
-			}).toThrow(ERRORS.DuplicateControllersInModuleError);
-		});
-
-		it("should throw an error when dynamic modules try to register the same controller", () => {
-			const DynamicModule = {
-				forRoot(config: { value: string }): AnyModule {
-					return {
-						name: "DynamicModule",
-						controllers: [TestController],
-						providers: {
-							configValue: config.value,
-						},
-					};
+			registerModule(
+				{
+					queryHandlers: [TestQueryHandler],
+					commandHandlers: [TestCommandHandler],
 				},
+				{
+					onQueryHandler,
+					onCommandHandler,
+				},
+			);
+
+			const resolveQuery = onQueryHandler.mock.calls[0][0];
+			const commandResolver = onCommandHandler.mock.calls[0][0];
+			const queryHandler = resolveQuery();
+			const commandHandler = commandResolver();
+
+			expect(onQueryHandler).toHaveBeenCalledTimes(1);
+			expect(onQueryHandler).toHaveBeenCalledWith(expect.any(Function));
+			expect(onCommandHandler).toHaveBeenCalledTimes(1);
+			expect(onCommandHandler).toHaveBeenCalledWith(expect.any(Function));
+
+			expect(queryHandler.key).toBe("query-key");
+			expect(commandHandler.key).toBe("command-key");
+			expect(queryHandler).toBeInstanceOf(TestQueryHandler);
+			expect(commandHandler).toBeInstanceOf(TestCommandHandler);
+			expect(commandHandler.instanceId).toBe(commandResolver().instanceId);
+			expect(queryHandler.instanceId).toBe(resolveQuery().instanceId);
+		});
+
+		it("should register handlers with custom lifetime", () => {
+			const onQueryHandler = vi.fn();
+			const onCommandHandler = vi.fn();
+
+			registerModule(
+				{
+					commandHandlers: [
+						{
+							useClass: TestCommandHandler,
+							lifetime: Lifetime.SCOPED,
+						},
+					],
+					queryHandlers: [
+						{
+							useClass: TestQueryHandler,
+							lifetime: Lifetime.SCOPED,
+						},
+					],
+				},
+				{
+					onQueryHandler,
+					onCommandHandler,
+				},
+			);
+
+			const resolveQuery = onQueryHandler.mock.calls[0][0];
+			const resolveCommand = onCommandHandler.mock.calls[0][0];
+
+			expect(onQueryHandler).toHaveBeenCalledTimes(1);
+			expect(resolveQuery().instanceId).not.toBe(resolveQuery().instanceId);
+			expect(onCommandHandler).toHaveBeenCalledTimes(1);
+			expect(resolveCommand().instanceId).not.toBe(resolveCommand().instanceId);
+		});
+	});
+
+	describe("createFactoryProvider Helper", () => {
+		it("should create factory provider with createFactoryProvider", () => {
+			class ComplexService extends TestableBase {}
+
+			type DepsMap = {
+				service1: TestableBase;
+				service2: TestableBase;
+				appConfig: string;
 			};
 
-			expect(() => {
-				registerModule({
-					name: "AppModule",
-					imports: [
-						{
-							name: "AnyModule",
-							imports: [DynamicModule.forRoot({ value: "config1" })],
-						},
-						DynamicModule.forRoot({ value: "config2" }),
-					],
-				});
-			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
-		});
+			const factory = createFactoryProvider<DepsMap>();
 
-		it("should throw an error when different static modules try to register the same controller", () => {
-			expect(() => {
-				registerModule({
-					name: "AppModule",
-					imports: [
-						{
-							name: "StaticModule1",
-							controllers: [TestController],
-						},
-						{
-							name: "StaticModule2",
-							controllers: [TestController],
-						},
-					],
-				});
-			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
+			const { scope } = registerModule({
+				providers: {
+					service1: class Service1 extends TestableBase {},
+					service2: class Service2 extends TestableBase {},
+					appConfig: "test-config",
+					complexService: factory({
+						provide: ComplexService,
+						inject: ["service1", "service2", "appConfig"],
+						useFactory: (service1, service2, appConfig) =>
+							new ComplexService({ service1, service2, appConfig }),
+					}),
+				},
+			});
+
+			const complexService = scope.resolve("complexService");
+
+			expect(complexService).toBeInstanceOf(ComplexService);
+			expect(complexService.getDeps().service1).toBeInstanceOf(TestableBase);
+			expect(complexService.getDeps().service2).toBeInstanceOf(TestableBase);
+			expect(complexService.getDeps().appConfig).toBe("test-config");
 		});
 	});
 });

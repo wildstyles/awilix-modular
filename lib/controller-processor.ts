@@ -58,6 +58,7 @@ export class ControllerProcessor {
 
 	public processControllers(m: M, diScope: AwilixContainer): void {
 		if (!m.controllers?.length) return;
+		if (m.registerControllers === false) return;
 
 		if (new Set(m.controllers).size !== m.controllers.length) {
 			throw new ERRORS.DuplicateControllersInModuleError(m.name);
@@ -237,13 +238,9 @@ export class ControllerProcessor {
 
 		const result: Array<string> = [];
 		rootPaths.forEach((rootPath) => {
-			if (methodPaths.length === 0) {
-				result.push(rootPath);
-			} else {
-				methodPaths.forEach((methodPath) => {
-					result.push(rootPath + methodPath);
-				});
-			}
+			methodPaths.forEach((methodPath) => {
+				result.push(rootPath + methodPath);
+			});
 		});
 
 		return result;

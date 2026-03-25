@@ -1,0 +1,436 @@
+import { Lifetime, AwilixResolutionError } from "awilix";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GET, controller } from "../lib/decorators/decorators.js";
+import * as ERRORS from "../lib/di-context.errors.js";
+import { DIContext, type DiContextOptions } from "../lib/di-context.js";
+import {
+	type AnyModule,
+	type Controller,
+	createDynamicModule,
+	type ModuleDef,
+} from "../lib/di-context.types.js";
+import type { ExpressFramework } from "../lib/framework.types.js";
+
+describe("ControllerProcessor", () => {
+	const createMockExpress = () => {
+		const app: any = () => {};
+		app.use = vi.fn();
+		app.get = vi.fn();
+		app.post = vi.fn();
+		app.set = vi.fn();
+
+		return app;
+	};
+
+	let mockExpress: ReturnType<typeof createMockExpress>;
+
+	beforeEach(() => {
+		mockExpress = createMockExpress();
+	});
+
+	// Helper to register modules
+	const registerModule = (
+		module: AnyModule,
+		options?: Partial<DiContextOptions>,
+	) => {
+		return DIContext.create(module, {
+			framework: options?.framework || mockExpress,
+			...options,
+		});
+	};
+
+	class ControllerBase implements Controller<ExpressFramework> {
+		registerRoutes(framework: ExpressFramework) {}
+	}
+
+	class TestController extends ControllerBase {}
+
+	class DecoratedController {
+		@GET("/test")
+		getTest() {
+			return "test";
+		}
+	}
+
+	describe("Basic Controller Registration", () => {
+		it("should register controllers with Express framework", () => {
+			class ApiController extends ControllerBase {
+				registerRoutes(framework: ExpressFramework) {
+					framework.get("/api/users", () => {});
+					framework.post("/api/users", () => {});
+				}
+			}
+
+			registerModule({
+				name: "ApiModule",
+				controllers: [ApiController],
+			});
+
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/api/users",
+				expect.any(Function),
+			);
+			expect(mockExpress.post).toHaveBeenCalledWith(
+				"/api/users",
+				expect.any(Function),
+			);
+		});
+
+		it("should register decorated controllers with Express framework", () => {
+			registerModule({
+				name: "TestModule",
+				controllers: [DecoratedController],
+			});
+
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/test",
+				expect.any(Function),
+			);
+		});
+	});
+
+	describe("Duplicate Controller Detection", () => {
+		it("should throw error when module has duplicate controllers in its array", () => {
+			expect(() => {
+				registerModule({
+					name: "DuplicateControllerModule",
+					controllers: [TestController, TestController],
+				});
+			}).toThrow(ERRORS.DuplicateControllersInModuleError);
+		});
+
+		it("should throw error when different static modules try to register same controller", () => {
+			expect(() => {
+				registerModule({
+					name: "AppModule",
+					imports: [
+						{
+							name: "StaticModule1",
+							controllers: [TestController],
+						},
+						{
+							name: "StaticModule2",
+							controllers: [TestController],
+						},
+					],
+				});
+			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
+		});
+
+		it("should throw error when multiple dynamic modules with registerControllers: true use same controller", () => {
+			const DynamicModule = createDynamicModule<
+				ModuleDef<{ forRootConfig: {} }>
+			>(() => ({
+				name: "DynamicModule",
+				controllers: [TestController],
+			}));
+
+			expect(() => {
+				registerModule({
+					name: "AppModule",
+					imports: [
+						{
+							name: "Wrapper1",
+							imports: [
+								DynamicModule.forRoot({}, { registerControllers: true }),
+							],
+						},
+						{
+							name: "Wrapper2",
+							imports: [
+								DynamicModule.forRoot({}, { registerControllers: true }),
+							],
+						},
+					],
+				});
+			}).toThrow(ERRORS.ControllerAlreadyRegisteredError);
+		});
+	});
+
+	describe("Same Module Instance Imported Multiple Times", () => {
+		it("should skip register controller once when same module instance is imported multiple times", () => {
+			const SharedModule = {
+				name: "SharedModule",
+				controllers: [DecoratedController],
+			};
+
+			expect(() => {
+				registerModule({
+					name: "AppModule",
+					imports: [
+						{
+							name: "FeatureModule1",
+							imports: [SharedModule],
+						},
+						{
+							name: "FeatureModule2",
+							imports: [SharedModule],
+						},
+					],
+				});
+			}).not.toThrow();
+
+			expect(mockExpress.get).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe("Dynamic Module registerControllers Option", () => {
+		it("should skip controller registration when registerControllers is false(by default)", () => {
+			const DynamicModule = createDynamicModule(() => ({
+				name: "DynamicModule",
+				controllers: [DecoratedController],
+			}));
+
+			registerModule(
+				{
+					name: "AppModule",
+					imports: [DynamicModule.forRoot({})],
+				},
+				{ framework: mockExpress },
+			);
+
+			expect(mockExpress.get).not.toHaveBeenCalled();
+		});
+
+		it("should register controllers when registerControllers is true", () => {
+			const DynamicModule = createDynamicModule(() => ({
+				name: "DynamicModule",
+				controllers: [DecoratedController],
+			}));
+
+			registerModule(
+				{
+					name: "AppModule",
+					imports: [DynamicModule.forRoot({}, { registerControllers: true })],
+				},
+				{ framework: mockExpress },
+			);
+
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/test",
+				expect.any(Function),
+			);
+		});
+	});
+
+	describe("Framework Detection", () => {
+		it("should register decorated controllers with Fastify framework", () => {
+			const mockFastify: any = {};
+			mockFastify.route = vi.fn();
+			const fastifySymbol = Symbol.for("fastify.instance");
+			mockFastify[fastifySymbol] = true;
+
+			registerModule(
+				{
+					name: "FastifyModule",
+					controllers: [DecoratedController],
+				},
+				{ framework: mockFastify },
+			);
+
+			expect(mockFastify.route).toHaveBeenCalledWith(
+				expect.objectContaining({
+					method: "GET",
+					url: "/test",
+				}),
+			);
+		});
+
+		it("should throw error when using unsupported framework with decorated controllers", () => {
+			expect(() => {
+				registerModule(
+					{
+						name: "TestModule",
+						controllers: [DecoratedController],
+					},
+					{
+						framework: { someMethod: vi.fn() },
+					},
+				);
+			}).toThrow(ERRORS.UnsupportedFrameworkError);
+		});
+	});
+
+	describe("Path Concatenation", () => {
+		it("should use controller path when no method path is specified", () => {
+			@controller("/api")
+			class ControllerPathOnlyController {
+				@GET()
+				getDefault() {}
+			}
+
+			registerModule({
+				name: "TestModule",
+				controllers: [ControllerPathOnlyController],
+			});
+
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/api/",
+				expect.any(Function),
+			);
+		});
+
+		it("should concatenate controller path with method path", () => {
+			@controller("/api")
+			class CombinedPathController extends DecoratedController {}
+
+			registerModule({
+				name: "TestModule",
+				controllers: [CombinedPathController],
+			});
+
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/api/test",
+				expect.any(Function),
+			);
+		});
+
+		it("should handle multiple controller paths with multiple method paths", () => {
+			@controller(["/api/v1", "/api/v2"])
+			class MultiPathController extends DecoratedController {}
+
+			registerModule({
+				name: "TestModule",
+				controllers: [MultiPathController],
+			});
+
+			// Should create all combinations of controller paths and method paths
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/api/v1/test",
+				expect.any(Function),
+			);
+			expect(mockExpress.get).toHaveBeenCalledWith(
+				"/api/v2/test",
+				expect.any(Function),
+			);
+		});
+	});
+
+	describe("Handler Method Invocation", () => {
+		it("should resolve controller and call method with request and reply", async () => {
+			const mockReply = { send: vi.fn() };
+
+			registerModule({
+				name: "TestModule",
+				controllers: [DecoratedController],
+			});
+
+			// Get the registered handler (Express wraps it in middleware)
+			const handlerCall = mockExpress.get.mock.calls.find(
+				(call) => call[0] === "/test",
+			);
+
+			const handler = handlerCall![1];
+
+			// Call the handler (tests line 161: return resolve()[methodName](request, reply))
+			await handler({}, mockReply, vi.fn());
+
+			expect(mockReply.send).toHaveBeenCalledWith("test");
+		});
+	});
+
+	describe("Controller Self-Resolution with Non-Singleton Lifetimes", () => {
+		it("should allow SCOPED controller to resolve itself via resolveSelf injector", async () => {
+			class SelfResolvingController {
+				public instanceId = Math.random();
+
+				constructor(private resolveSelf: () => SelfResolvingController) {}
+
+				@GET("/self-scoped")
+				async getSelf() {
+					const newInstance = this.resolveSelf();
+
+					return {
+						instanceId: newInstance.instanceId,
+					};
+				}
+			}
+
+			registerModule({
+				name: "TestModule",
+				controllers: [
+					{
+						useClass: SelfResolvingController,
+						lifetime: Lifetime.SCOPED,
+					},
+				],
+			});
+
+			// Get the registered handler
+			const handlerCall = mockExpress.get.mock.calls.find(
+				(call) => call[0] === "/self-scoped",
+			);
+
+			const handler = handlerCall![1];
+			const mockReply1 = { send: vi.fn(), headersSent: false };
+			const mockReply2 = { send: vi.fn(), headersSent: false };
+
+			// Call the handler (tests line 88-94: resolveSelf injector)
+			await handler({}, mockReply1, vi.fn());
+			await handler({}, mockReply2, vi.fn());
+
+			const result1 = mockReply1.send.mock.calls[0][0];
+			const result2 = mockReply2.send.mock.calls[0][0];
+
+			expect(result1.instanceId).not.toBe(result2.instanceId);
+		});
+
+		it("should NOT provide resolveSelf injector for SINGLETON controllers", async () => {
+			class SingletonController {
+				public instanceId = Math.random();
+
+				constructor(private resolveSelf: () => SingletonController) {}
+
+				@GET("/self-singleton")
+				async getSelf() {
+					return {
+						instanceId: this.resolveSelf().instanceId,
+					};
+				}
+			}
+
+			expect(() => {
+				registerModule({
+					name: "DuplicateControllerModule",
+					controllers: [SingletonController],
+				});
+			}).toThrow(AwilixResolutionError);
+		});
+	});
+
+	describe("Express Error Handling", () => {
+		it("should pass errors to Express next() middleware when controller throws", async () => {
+			const testError = new Error("Test error from controller");
+
+			class ErrorThrowingController {
+				@GET("/error")
+				async throwError() {
+					throw testError;
+				}
+			}
+
+			registerModule({
+				name: "TestModule",
+				controllers: [ErrorThrowingController],
+			});
+
+			// Get the registered handler
+			const handlerCall = mockExpress.get.mock.calls.find(
+				(call) => call[0] === "/error",
+			);
+
+			const handler = handlerCall![1];
+			const mockReply = { send: vi.fn(), headersSent: false };
+			const mockNext = vi.fn();
+
+			// Call the handler (tests line 227: next(error))
+			await handler({}, mockReply, mockNext);
+
+			// Verify the error was passed to next()
+			expect(mockNext).toHaveBeenCalledWith(testError);
+			expect(mockNext).toHaveBeenCalledTimes(1);
+			// Result should not be sent since an error was thrown
+			expect(mockReply.send).not.toHaveBeenCalled();
+		});
+	});
+});

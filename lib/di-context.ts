@@ -145,15 +145,11 @@ export class DIContext {
 
 		if (isCircular) {
 			this.ensureCircularDependencyHasForwardRef(m, moduleChain);
-			const existingScope = this.moduleScopeMap.get(m);
-
-			if (!existingScope) {
-				throw new ERRORS.ModuleScopeNotFoundError(m.name);
-			}
 
 			return {
 				name: m.name,
-				scope: existingScope,
+				// biome-ignore lint/style/noNonNullAssertion: circular module was already registered at line 158
+				scope: this.moduleScopeMap.get(m)!,
 				importedScopes: new Map(),
 			};
 		}
@@ -250,13 +246,10 @@ export class DIContext {
 		}
 
 		if (isFactoryProvider(provider)) {
-			const factoryDeps = (provider.inject || []).map((k) => {
-				if (!resolutionScope.registrations[k]) {
-					throw new ERRORS.ProviderNotFoundError(key, module.name);
-				}
-
-				return resolutionScope.registrations[k].resolve(resolutionScope);
-			});
+			const factoryDeps = (provider.inject || []).map((k) =>
+				// biome-ignore lint/style/noNonNullAssertion: dependencies are validated by ProviderDependencySorter
+				resolutionScope.registrations[k]!.resolve(resolutionScope),
+			);
 
 			return asFunction(
 				() => provider.useFactory(...factoryDeps),

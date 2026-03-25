@@ -7,13 +7,6 @@ export class UnsupportedProviderTypeError extends Error {
 	}
 }
 
-export class ProviderNotFoundError extends Error {
-	constructor(providerKey: string, moduleName: string) {
-		super(`Provider ${providerKey} is not exist in ${moduleName}`);
-		this.name = "ProviderNotFoundError";
-	}
-}
-
 export class DuplicateControllersInModuleError extends Error {
 	constructor(moduleName: string) {
 		super(
@@ -59,15 +52,6 @@ export class DuplicateModuleImportError extends Error {
 	}
 }
 
-export class DuplicateDynamicModuleInstanceError extends Error {
-	constructor(parentModuleName: string) {
-		super(
-			`Module "${parentModuleName}" has duplicate import of the same dynamic module instance`,
-		);
-		this.name = "DuplicateDynamicModuleInstanceError";
-	}
-}
-
 export class ProviderNameConflictError extends Error {
 	constructor(moduleName: string, conflictingKeys: string[]) {
 		super(
@@ -92,16 +76,6 @@ export class CircularModuleDependencyError extends Error {
 			`Circular module dependency detected: ${chain.join(" -> ")} -> ${moduleName}`,
 		);
 		this.name = "CircularModuleDependencyError";
-	}
-}
-
-export class ModuleScopeNotFoundError extends Error {
-	constructor(moduleName: string) {
-		super(
-			`Module scope not found in map for circular reference: ${moduleName}. ` +
-				`This should not happen - please report this as a bug.`,
-		);
-		this.name = "ModuleScopeNotFoundError";
 	}
 }
 

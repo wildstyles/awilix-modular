@@ -542,7 +542,7 @@ export const AppModule = createStaticModule<AppModuleDef>({
       { jwtSecret: "user-secret", audience: "users" },
       { registerControllers: true },
     ),
-    // Secondary instance - only services, no controllers (avoids duplicate registration error)
+    // Secondary instance - only services, no controllers (default: false)
     AuthModule.forRoot({ jwtSecret: "admin-secret", audience: "admins" }),
   ],
 });

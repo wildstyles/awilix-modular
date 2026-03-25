@@ -1,0 +1,212 @@
+import { describe, expect, it } from "vitest";
+
+import {
+	after as AFTER,
+	before as BEFORE,
+	controller,
+	DELETE,
+	GET,
+	PATCH,
+	POST,
+	PUT,
+} from "../lib/decorators/decorators.js";
+import { HttpVerbs } from "../lib/decorators/http-verbs.js";
+import { type IState, STATE } from "../lib/decorators/state-util.js";
+
+/**
+ * Helper function to get decorator state from a class
+ * Mirrors the approach used in controller-processor.ts
+ */
+function getDecoratorState(target: any): IState | null {
+	const symbol = Object.getOwnPropertySymbols(target).find(
+		(s) => s.toString() === "Symbol(Symbol.metadata)",
+	);
+
+	if (!symbol) return null;
+
+	return target[symbol][STATE] || null;
+}
+
+describe("Decorators", () => {
+	describe("Route Decorators", () => {
+		it("should use default path '/' when no path is provided", () => {
+			class TestController {
+				@GET()
+				root() {}
+			}
+
+			const state = getDecoratorState(TestController);
+
+			const routeState = state?.methods.get("root");
+			expect(routeState?.paths).toEqual(["/"]);
+		});
+
+		it("should handle methods with no decorators", () => {
+			class TestController {
+				regularMethod() {}
+			}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state).toBeNull();
+		});
+
+		it("should assign HTTP verb decorators to different methods", () => {
+			class TestController {
+				@GET("/users")
+				getUsers() {}
+
+				@POST("/users")
+				@GET("/users")
+				createUser() {}
+
+				@PUT("/users/:id")
+				@PATCH("/users/:userId")
+				updateUser() {}
+
+				@DELETE("/users/:id")
+				deleteUser() {}
+
+				@PATCH("/users/:id")
+				patchUser() {}
+			}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state).not.toBeNull();
+
+			// GET
+			expect(state?.methods.has("getUsers")).toBe(true);
+			const getUsersRoute = state?.methods.get("getUsers");
+			expect(getUsersRoute?.verbs).toEqual([HttpVerbs.GET]);
+			expect(getUsersRoute?.paths).toEqual(["/users"]);
+
+			// POST, no path dublication
+			const createUserRoute = state?.methods.get("createUser");
+			expect(createUserRoute?.verbs).toEqual([HttpVerbs.GET, HttpVerbs.POST]);
+			expect(createUserRoute?.paths).toEqual(["/users"]);
+
+			// PUT
+			const updateUserRoute = state?.methods.get("updateUser");
+			expect(updateUserRoute?.verbs).toEqual([HttpVerbs.PATCH, HttpVerbs.PUT]);
+			expect(updateUserRoute?.paths).toEqual(["/users/:userId", "/users/:id"]);
+
+			// DELETE
+			const deleteUserRoute = state?.methods.get("deleteUser");
+			expect(deleteUserRoute?.verbs).toEqual([HttpVerbs.DELETE]);
+			expect(deleteUserRoute?.paths).toEqual(["/users/:id"]);
+
+			// PATCH
+			const patchUserRoute = state?.methods.get("patchUser");
+			expect(patchUserRoute?.verbs).toEqual([HttpVerbs.PATCH]);
+			expect(patchUserRoute?.paths).toEqual(["/users/:id"]);
+		});
+	});
+
+	describe("Controller Decorator", () => {
+		it("should assign single path to controller without dublication", () => {
+			@controller(["/api", "/api"])
+			class TestController {}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state?.root.paths).toEqual(["/api"]);
+		});
+
+		it("should assign multiple paths (array) to controller", () => {
+			@controller(["/api", "/v1/api"])
+			class TestController {}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state?.root.paths).toEqual(["/api", "/v1/api"]);
+		});
+
+		it("should assign path from object format to controller", () => {
+			@controller({ path: "/api" })
+			class TestController {}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state?.root.paths).toEqual(["/api"]);
+		});
+
+		it("should assign multiple paths from object format to controller", () => {
+			@controller({ path: ["/api", "/v1/api"] })
+			class TestController {}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state?.root.paths).toEqual(["/api", "/v1/api"]);
+		});
+
+		it("should not modify metadata when controller has no options and no decorated methods", () => {
+			@controller()
+			class TestController {}
+
+			const state = getDecoratorState(TestController);
+
+			expect(state).toBeNull();
+		});
+	});
+
+	describe("Middleware Decorators", () => {
+		const mockMiddleware1 = () => {};
+		const mockMiddleware2 = () => {};
+		const mockMiddleware3 = () => {};
+
+		it("should stack multiple middleware decorators on method", () => {
+			class TestController {
+				@BEFORE(mockMiddleware2)
+				@BEFORE(mockMiddleware1)
+				@AFTER(mockMiddleware3)
+				@AFTER([mockMiddleware1, mockMiddleware2])
+				getUsers() {}
+			}
+
+			const state = getDecoratorState(TestController);
+
+			const routeState = state?.methods.get("getUsers");
+			expect(routeState?.beforeMiddleware).toEqual([
+				mockMiddleware1,
+				mockMiddleware2,
+			]);
+			expect(routeState?.afterMiddleware).toEqual([
+				mockMiddleware1,
+				mockMiddleware2,
+				mockMiddleware3,
+			]);
+		});
+	});
+
+	describe("Combined Decorators", () => {
+		const authMiddleware = () => {};
+		const loggingMiddleware = () => {};
+
+		it("should combine multiple decorators on a method and on class", () => {
+			@controller("/api")
+			@BEFORE(authMiddleware)
+			@AFTER(loggingMiddleware)
+			class TestController {
+				@BEFORE(authMiddleware)
+				@AFTER(loggingMiddleware)
+				@POST("/users")
+				createUser() {}
+			}
+
+			const state = getDecoratorState(TestController);
+
+			const routeState = state?.methods.get("createUser");
+
+			// Class-level middleware
+			expect(state?.root.beforeMiddleware).toEqual([authMiddleware]);
+			expect(state?.root.afterMiddleware).toEqual([loggingMiddleware]);
+			expect(state?.root.paths).toEqual(["/api"]);
+
+			expect(routeState?.verbs).toEqual([HttpVerbs.POST]);
+			expect(routeState?.paths).toEqual(["/users"]);
+			expect(routeState?.beforeMiddleware).toEqual([authMiddleware]);
+			expect(routeState?.afterMiddleware).toEqual([loggingMiddleware]);
+		});
+	});
+});
