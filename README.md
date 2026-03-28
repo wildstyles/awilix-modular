@@ -125,7 +125,6 @@ Use `declare module` to make common dependencies globally available to all modul
 ```typescript
 // app.module.ts
 import { DIContext } from "awilix-modular";
-import { asClass, asValue } from "awilix";
 import { UserModule } from "./user.module";
 
 type CommonDeps = {
@@ -148,7 +147,7 @@ const app = express();
 DIContext.create(AppModule, {
   framework: app,
   rootProviders: {
-    logger: asClass(Logger).singleton(),
+    logger: Logger,
   },
 });
 
