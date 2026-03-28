@@ -1,13 +1,12 @@
-import { Lifetime, AwilixResolutionError } from "awilix";
+import { AwilixResolutionError, Lifetime } from "awilix";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GET, controller } from "../lib/decorators/decorators.js";
+import { controller, GET } from "../lib/decorators/decorators.js";
 import * as ERRORS from "../lib/di-context.errors.js";
 import { DIContext, type DiContextOptions } from "../lib/di-context.js";
 import {
 	type AnyModule,
 	type Controller,
 	createDynamicModule,
-	type ModuleDef,
 } from "../lib/di-context.types.js";
 import type { ExpressFramework } from "../lib/framework.types.js";
 
@@ -40,7 +39,7 @@ describe("ControllerProcessor", () => {
 	};
 
 	class ControllerBase implements Controller<ExpressFramework> {
-		registerRoutes(framework: ExpressFramework) {}
+		registerRoutes(_framework: ExpressFramework) {}
 	}
 
 	class TestController extends ControllerBase {}
@@ -118,9 +117,7 @@ describe("ControllerProcessor", () => {
 		});
 
 		it("should throw error when multiple dynamic modules with registerControllers: true use same controller", () => {
-			const DynamicModule = createDynamicModule<
-				ModuleDef<{ forRootConfig: {} }>
-			>(() => ({
+			const DynamicModule = createDynamicModule(() => ({
 				name: "DynamicModule",
 				controllers: [TestController],
 			}));
@@ -320,7 +317,7 @@ describe("ControllerProcessor", () => {
 				(call) => call[0] === "/test",
 			);
 
-			const handler = handlerCall![1];
+			const handler = handlerCall[1];
 
 			// Call the handler (tests line 161: return resolve()[methodName](request, reply))
 			await handler({}, mockReply, vi.fn());
@@ -361,7 +358,7 @@ describe("ControllerProcessor", () => {
 				(call) => call[0] === "/self-scoped",
 			);
 
-			const handler = handlerCall![1];
+			const handler = handlerCall[1];
 			const mockReply1 = { send: vi.fn(), headersSent: false };
 			const mockReply2 = { send: vi.fn(), headersSent: false };
 
@@ -419,7 +416,7 @@ describe("ControllerProcessor", () => {
 				(call) => call[0] === "/error",
 			);
 
-			const handler = handlerCall![1];
+			const handler = handlerCall[1];
 			const mockReply = { send: vi.fn(), headersSent: false };
 			const mockNext = vi.fn();
 
