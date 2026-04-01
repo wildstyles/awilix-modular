@@ -6,9 +6,12 @@ import {
 	type CommandContracts,
 	type QueryContracts,
 } from "@/modules/index.js";
+import { setupSwagger } from "./setup-swagger.js";
 
 async function bootstrap() {
 	const fastify = buildApp();
+
+	await setupSwagger(fastify);
 
 	const queryBusInstance = initializeBus<QueryContracts>();
 	const commandBusInstance = initializeBus<CommandContracts>();
