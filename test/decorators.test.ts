@@ -9,6 +9,7 @@ import {
 	PATCH,
 	POST,
 	PUT,
+	schema,
 } from "../lib/decorators/decorators.js";
 import { HttpVerbs } from "../lib/decorators/http-verbs.js";
 import { type IState, STATE } from "../lib/decorators/state-util.js";
@@ -207,6 +208,31 @@ describe("Decorators", () => {
 			expect(routeState?.paths).toEqual(["/users"]);
 			expect(routeState?.beforeMiddleware).toEqual([authMiddleware]);
 			expect(routeState?.afterMiddleware).toEqual([loggingMiddleware]);
+		});
+	});
+
+	describe("Schema Decorator", () => {
+		it("should add schema to a method", () => {
+			const testSchema = {
+				body: { type: "object", properties: { name: { type: "string" } } },
+				querystring: { type: "object" },
+				params: { type: "object" },
+				headers: { type: "object" },
+				response: {
+					200: { type: "object", properties: { id: { type: "number" } } },
+				},
+			};
+
+			class TestController {
+				@GET("/users")
+				@schema(testSchema)
+				getUsers() {}
+			}
+
+			const state = getDecoratorState(TestController);
+			const routeState = state?.methods.get("getUsers");
+
+			expect(routeState?.schema).toEqual(testSchema);
 		});
 	});
 });

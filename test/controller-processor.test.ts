@@ -1,6 +1,6 @@
 import { AwilixResolutionError, Lifetime } from "awilix";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { controller, GET } from "../lib/decorators/decorators.js";
+import { controller, GET, schema } from "../lib/decorators/decorators.js";
 import * as ERRORS from "../lib/di-context.errors.js";
 import { DIContext, type DiContextOptions } from "../lib/di-context.js";
 import {
@@ -17,6 +17,15 @@ describe("ControllerProcessor", () => {
 		app.get = vi.fn();
 		app.post = vi.fn();
 		app.set = vi.fn();
+
+		return app;
+	};
+
+	const createMockFastify = () => {
+		const app: any = {};
+		app.route = vi.fn();
+		const fastifySymbol = Symbol.for("fastify.instance");
+		app[fastifySymbol] = true;
 
 		return app;
 	};
@@ -212,10 +221,7 @@ describe("ControllerProcessor", () => {
 
 	describe("Framework Detection", () => {
 		it("should register decorated controllers with Fastify framework", () => {
-			const mockFastify: any = {};
-			mockFastify.route = vi.fn();
-			const fastifySymbol = Symbol.for("fastify.instance");
-			mockFastify[fastifySymbol] = true;
+			const mockFastify = createMockFastify();
 
 			registerModule(
 				{
@@ -428,6 +434,75 @@ describe("ControllerProcessor", () => {
 			expect(mockNext).toHaveBeenCalledTimes(1);
 			// Result should not be sent since an error was thrown
 			expect(mockReply.send).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("Schema Decorator with Fastify", () => {
+		it("should register schema with Fastify route", () => {
+			const mockFastify = createMockFastify();
+
+			const testSchema = {
+				body: {
+					type: "object",
+					properties: {
+						name: { type: "string" },
+					},
+				},
+				response: {
+					200: {
+						type: "object",
+						properties: {
+							id: { type: "number" },
+						},
+					},
+				},
+			};
+
+			class SchemaController {
+				@GET("/users")
+				@schema(testSchema)
+				getUsers() {
+					return { id: 1 };
+				}
+			}
+
+			registerModule(
+				{
+					name: "SchemaModule",
+					controllers: [SchemaController],
+				},
+				{ framework: mockFastify },
+			);
+
+			expect(mockFastify.route).toHaveBeenCalledWith(
+				expect.objectContaining({
+					method: "GET",
+					url: "/users",
+					schema: testSchema,
+				}),
+			);
+		});
+
+		it("should register route with empty schema when schema decorator is not used", () => {
+			const mockFastify = createMockFastify();
+
+			class NoSchemaController {
+				@GET("/users")
+				getUsers() {
+					return { id: 1 };
+				}
+			}
+
+			registerModule(
+				{
+					name: "NoSchemaModule",
+					controllers: [NoSchemaController],
+				},
+				{ framework: mockFastify },
+			);
+
+			const routeCall = mockFastify.route.mock.calls[0][0];
+			expect(routeCall.schema).toEqual({});
 		});
 	});
 });

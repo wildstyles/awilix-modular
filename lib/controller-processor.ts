@@ -6,6 +6,7 @@ import {
 } from "awilix";
 import type { HttpVerb } from "./decorators/http-verbs.js";
 import {
+	type FastifySchema,
 	type IRouteState,
 	type IState,
 	type MethodName,
@@ -30,6 +31,7 @@ type RouteRegistrationParams = {
 	path: string;
 	handler: any;
 	preHandler: any[];
+	schema: FastifySchema;
 };
 
 export class ControllerProcessor {
@@ -166,6 +168,7 @@ export class ControllerProcessor {
 					path,
 					handler,
 					preHandler: routeState.beforeMiddleware,
+					schema: routeState.schema,
 				});
 			});
 		});
@@ -196,6 +199,7 @@ export class ControllerProcessor {
 					...state.root.afterMiddleware,
 				],
 				verbs: method.verbs,
+				schema: method.schema,
 			});
 		});
 
@@ -208,6 +212,7 @@ export class ControllerProcessor {
 			url: params.path,
 			handler: params.handler,
 			preHandler: params.preHandler,
+			schema: params.schema,
 		});
 	}
 
