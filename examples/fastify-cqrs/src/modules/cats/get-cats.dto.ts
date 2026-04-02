@@ -42,6 +42,13 @@ export const GetCatsResponseSchema = Type.Object({
 	result: GetCatsRespsonseResultSchema,
 });
 
+export const GetCatsSchema = {
+	querystring: GetCatsQuerySchema,
+	response: {
+		200: GetCatsResponseSchema,
+	},
+};
+
 export type DogsServiceResponse = Static<typeof DogsServiceSchema>;
 export type CatsServiceResponse = Static<typeof CatsServiceSchema>;
 

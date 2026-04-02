@@ -4,7 +4,7 @@ export const STATE = Symbol("Router State");
 
 export type MiddlewareParameter = any[] | any;
 
-export interface FastifySchema {
+export interface RouteSchema {
 	body?: unknown;
 	querystring?: unknown;
 	params?: unknown;
@@ -17,7 +17,7 @@ export interface IRouteState {
 	beforeMiddleware: any[];
 	afterMiddleware: any[];
 	verbs: HttpVerb[];
-	schema: FastifySchema;
+	schema: RouteSchema;
 }
 
 export type MethodName = string | symbol;
@@ -131,7 +131,7 @@ export function addAfterMiddleware(
 export function setSchema(
 	state: IState,
 	methodName: MethodNameParameter,
-	schema: FastifySchema,
+	schema: RouteSchema,
 ): IState {
 	return updateRouteState(state, methodName, {
 		schema,

@@ -6,10 +6,10 @@ import {
 } from "awilix";
 import type { HttpVerb } from "./decorators/http-verbs.js";
 import {
-	type FastifySchema,
 	type IRouteState,
 	type IState,
 	type MethodName,
+	type RouteSchema,
 	STATE,
 } from "./decorators/state-util.js";
 import * as ERRORS from "./di-context.errors.js";
@@ -31,7 +31,7 @@ type RouteRegistrationParams = {
 	path: string;
 	handler: any;
 	preHandler: any[];
-	schema: FastifySchema;
+	schema: RouteSchema;
 };
 
 export class ControllerProcessor {

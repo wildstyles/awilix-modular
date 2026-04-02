@@ -1,12 +1,12 @@
 import type { HttpVerb } from "./decorators/http-verbs.js";
-import type { FastifySchema } from "./decorators/state-util.js";
+import type { RouteSchema } from "./decorators/state-util.js";
 
 export interface RouteOptions<TRequest = any, TReply = any> {
 	method: string | string[];
 	url: string;
 	handler: (request: TRequest, reply: TReply) => any | Promise<any>;
 	preHandler?: any[];
-	schema?: FastifySchema;
+	schema?: RouteSchema;
 }
 
 export interface FastifyFramework<TRequest = any, TReply = any> {

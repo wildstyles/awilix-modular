@@ -4,8 +4,8 @@ import {
 	addBeforeMiddleware,
 	addHttpVerbs,
 	addPaths,
-	type FastifySchema,
 	type MiddlewareParameter,
+	type RouteSchema,
 	setSchema,
 	updateState,
 } from "./state-util.js";
@@ -87,7 +87,7 @@ export function after(middleware: MiddlewareParameter) {
 	};
 }
 
-export function schema(schemaDefinition: FastifySchema) {
+export function schema(schemaDefinition: RouteSchema) {
 	return (target: any, context: ClassMethodDecoratorContext) => {
 		updateState(context.metadata, (state) =>
 			setSchema(state, context.name, schemaDefinition),

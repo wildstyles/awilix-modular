@@ -1,19 +1,7 @@
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
-import Fastify, {
-	type FastifyInstance as DefaultFastifyInstance,
-	type FastifyBaseLogger,
-	type RawReplyDefaultExpression,
-	type RawRequestDefaultExpression,
-	type RawServerDefault,
-} from "fastify";
+import Fastify from "fastify";
 
-export type FastifyInstance = DefaultFastifyInstance<
-	RawServerDefault,
-	RawRequestDefaultExpression<RawServerDefault>,
-	RawReplyDefaultExpression<RawServerDefault>,
-	FastifyBaseLogger,
-	TypeBoxTypeProvider
->;
+import type { FastifyInstance } from "./types.js";
 
 export function buildApp() {
 	const app: FastifyInstance = Fastify({

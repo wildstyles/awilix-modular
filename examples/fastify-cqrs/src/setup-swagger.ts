@@ -1,6 +1,7 @@
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
-import { FastifyInstance } from "./app.js";
+
+import { FastifyInstance } from "./types.js";
 
 export const setupSwagger = async (fastify: FastifyInstance) => {
 	await fastify.register(fastifySwagger, {

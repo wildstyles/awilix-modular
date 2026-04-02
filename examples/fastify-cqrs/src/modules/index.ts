@@ -3,7 +3,7 @@ import {
 	createStaticModule,
 	type ModuleDef,
 } from "awilix-modular";
-import type { FastifyInstance } from "@/app.js";
+import type { FastifyInstance } from "@/types.js";
 import {
 	CatsModule,
 	type CatsModuleQueryContracts,
