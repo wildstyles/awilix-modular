@@ -13,6 +13,7 @@ import {
 	STATE,
 } from "./decorators/state-util.js";
 import * as ERRORS from "./di-context.errors.js";
+import type { DiContextOptions } from "./di-context.js";
 import type {
 	Controller,
 	ControllerConstructor,
@@ -54,6 +55,7 @@ export class ControllerProcessor {
 	constructor(
 		private readonly framework: unknown,
 		private readonly providerOptions: Partial<BuildResolverOptions<any>>,
+		private readonly onRouteRegistered: DiContextOptions["onRouteRegistered"],
 	) {
 		this.frameworkType = this.detectFramework();
 	}
@@ -168,6 +170,12 @@ export class ControllerProcessor {
 					path,
 					handler,
 					preHandler: routeState.beforeMiddleware,
+					schema: routeState.schema,
+				});
+
+				this.onRouteRegistered?.({
+					method: verb,
+					path,
 					schema: routeState.schema,
 				});
 			});

@@ -1,18 +1,23 @@
-import { DIContext } from "awilix-modular";
+import { DIContext, OpenAPIBuilder } from "awilix-modular";
 import { buildApp } from "@/app.js";
 import { AppModule } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
 
 async function bootstrap() {
 	const app = buildApp();
-
-	setupSwagger(app);
+	const openapiBuilder = new OpenAPIBuilder();
 
 	DIContext.create(AppModule, {
 		framework: app,
+		onRouteRegistered: ({ method, path, schema }) => {
+			openapiBuilder.registerRoute(method, path, schema);
+		},
 	});
 
+	setupSwagger(app, openapiBuilder.buildPaths());
+
 	const PORT = 3000;
+
 	app.listen(PORT, () => {
 		console.log(`Server running on http://localhost:${PORT}`);
 		console.log(`API Documentation: http://localhost:${PORT}/api-docs`);

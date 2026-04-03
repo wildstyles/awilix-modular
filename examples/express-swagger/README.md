@@ -1,4 +1,4 @@
-# Awilix Modular Examples
+# Express + Swagger Example
 
 Examples demonstrating how to use `awilix-modular` with Express and TypeBox.
 
@@ -8,7 +8,7 @@ Examples demonstrating how to use `awilix-modular` with Express and TypeBox.
 # Build the main package first (from root directory)
 npm run build
 
-# Install examples dependencies
+# Install dependencies
 cd examples/express-swagger
 npm install
 npm run dev

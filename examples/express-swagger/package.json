@@ -12,13 +12,11 @@
 		"awilix": "^10.0.2",
 		"awilix-modular": "file:../..",
 		"express": "^4.21.2",
-		"swagger-jsdoc": "^6.2.8",
 		"swagger-ui-express": "^5.0.1"
 	},
 	"devDependencies": {
 		"@types/express": "^5.0.0",
 		"@types/node": "^22.10.2",
-		"@types/swagger-jsdoc": "^6.0.4",
 		"@types/swagger-ui-express": "^4.1.6",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2"

@@ -5,11 +5,18 @@ export const STATE = Symbol("Router State");
 export type MiddlewareParameter = any[] | any;
 
 export interface RouteSchema {
+	// Fastify/Framework-specific (for validation/types)
 	body?: unknown;
 	querystring?: unknown;
 	params?: unknown;
 	headers?: unknown;
 	response?: unknown;
+	// OpenAPI-specific metadata
+	description?: string;
+	summary?: string;
+	tags?: string[];
+	operationId?: string;
+	deprecated?: boolean;
 }
 
 export interface IRouteState {
