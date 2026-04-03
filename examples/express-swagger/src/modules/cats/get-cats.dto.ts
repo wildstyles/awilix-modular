@@ -1,7 +1,7 @@
 import { type Static, Type } from "@sinclair/typebox";
 
 export const GetCatsQuerySchema = Type.Object({
-	breed: Type.Optional(Type.String()),
+	breed: Type.String(),
 });
 
 const CatsServiceSchema = Type.Object({

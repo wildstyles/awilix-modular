@@ -20,7 +20,7 @@ export const setupSwagger = async (fastify: FastifyInstance) => {
 	});
 
 	await fastify.register(fastifySwaggerUi, {
-		routePrefix: "/documentation",
+		routePrefix: "/api-docs",
 	});
 
 	// NOTE: to see all schemas at end of file they got to be manually added

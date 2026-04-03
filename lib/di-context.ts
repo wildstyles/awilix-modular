@@ -25,14 +25,14 @@ import {
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
-import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 import type { RouteRegistration } from "./openapi-builder.js";
+import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
 export interface DiContextOptions {
 	framework: unknown;
 	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
 	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
-	onRouteRegistered?: (params: RouteRegistration) => void;
+	beforeRouteRegistered?: (params: RouteRegistration) => any[];
 	containerOptions?: ContainerOptions;
 	rootProviders?: Record<string, AnyProvider>;
 	providerOptions?: Partial<BuildResolverOptions<any>>;
@@ -71,7 +71,7 @@ export class DIContext {
 		this.controllerProcessor = new ControllerProcessor(
 			this.options.framework,
 			this.options.providerOptions || {},
-			this.options.onRouteRegistered,
+			this.options.beforeRouteRegistered,
 		);
 
 		this.rootContainer = createContainer(this.options.containerOptions);

@@ -55,7 +55,7 @@ export class ControllerProcessor {
 	constructor(
 		private readonly framework: unknown,
 		private readonly providerOptions: Partial<BuildResolverOptions<any>>,
-		private readonly onRouteRegistered: DiContextOptions["onRouteRegistered"],
+		private readonly beforeRouteRegistered: DiContextOptions["beforeRouteRegistered"],
 	) {
 		this.frameworkType = this.detectFramework();
 	}
@@ -165,17 +165,20 @@ export class ControllerProcessor {
 					return resolve()[methodName](request, reply);
 				};
 
+				const beforeMiddleware = this.beforeRouteRegistered?.({
+					method: verb,
+					path,
+					schema: routeState.schema,
+				});
+
 				this.routeRegistrationFn[this.frameworkType]({
 					verb,
 					path,
 					handler,
-					preHandler: routeState.beforeMiddleware,
-					schema: routeState.schema,
-				});
-
-				this.onRouteRegistered?.({
-					method: verb,
-					path,
+					preHandler: [
+						...(beforeMiddleware ?? []),
+						...routeState.beforeMiddleware,
+					],
 					schema: routeState.schema,
 				});
 			});

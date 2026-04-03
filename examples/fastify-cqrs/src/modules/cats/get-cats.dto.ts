@@ -1,7 +1,12 @@
 import { type Static, Type } from "@sinclair/typebox";
 
 export const GetCatsQuerySchema = Type.Object({
-	breed: Type.Optional(Type.String()),
+	// breed: Type.Optional(Type.String()),
+	breed: Type.String(),
+});
+
+export const GetCatsParamsSchema = Type.Object({
+	id: Type.Number({ minimum: 1 }),
 });
 
 const OwnersService1Schema = Type.Object({
@@ -43,6 +48,7 @@ export const GetCatsResponseSchema = Type.Object({
 });
 
 export const GetCatsSchema = {
+	params: GetCatsParamsSchema,
 	querystring: GetCatsQuerySchema,
 	response: {
 		200: GetCatsResponseSchema,
@@ -54,5 +60,6 @@ export type CatsServiceResponse = Static<typeof CatsServiceSchema>;
 
 export type GetCatsResult = Static<typeof GetCatsRespsonseResultSchema>;
 
+export type GetCatsParams = Static<typeof GetCatsParamsSchema>;
 export type GetCatsQuery = Static<typeof GetCatsQuerySchema>;
 export type GetCatsResponse = Static<typeof GetCatsResponseSchema>;

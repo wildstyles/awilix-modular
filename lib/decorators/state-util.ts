@@ -35,6 +35,15 @@ export interface IState {
 	methods: Map<MethodName, IRouteState>;
 }
 
+export function hasValidationSchema(schema: RouteSchema): boolean {
+	return !!(
+		schema?.body ||
+		schema?.querystring ||
+		schema?.params ||
+		schema?.headers
+	);
+}
+
 export function setState(metadata: DecoratorMetadataObject, state: IState) {
 	metadata[STATE] = state;
 

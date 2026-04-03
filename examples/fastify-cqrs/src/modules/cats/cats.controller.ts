@@ -9,14 +9,15 @@ export class CatsController implements Controller {
 	registerRoutes(fastify: FastifyInstance) {
 		fastify.route({
 			method: "GET",
-			url: "/cats",
+			url: "/cats/:id",
 			schema: GetCatsSchema,
 			// fully type safe thanks to TypeBoxTypeProvider
 			handler: async (req, res) => {
-				const result = await fastify.queryBus.execute(
-					"cats/get-cats",
-					req.query,
-				);
+				const query = req.query;
+
+				const result = await fastify.queryBus.execute("cats/get-cats", {
+					...query,
+				});
 
 				return res
 					.status(200)

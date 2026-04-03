@@ -2,6 +2,7 @@ import { DIContext, OpenAPIBuilder } from "awilix-modular";
 import { buildApp } from "@/app.js";
 import { AppModule } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
+import { createValidationMiddleware } from "./ajv-validation.middleware.js";
 
 async function bootstrap() {
 	const app = buildApp();
@@ -9,8 +10,10 @@ async function bootstrap() {
 
 	DIContext.create(AppModule, {
 		framework: app,
-		onRouteRegistered: ({ method, path, schema }) => {
+		beforeRouteRegistered: ({ method, path, schema }) => {
 			openapiBuilder.registerRoute(method, path, schema);
+
+			return [createValidationMiddleware(schema)];
 		},
 	});
 
