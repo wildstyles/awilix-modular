@@ -24,6 +24,8 @@ A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix)
   - [Configuring Provider Options](#configuring-provider-options)
   - [Scoped Controllers](#scoped-controllers)
 - [Native ES Decorator-Based Routing](#native-es-decorator-based-routing)
+- [OpenAPI/Swagger Integration](#openapiswagger-integration)
+- [Type-Safe Request/Response](#type-safe-requestresponse)
 - [Dynamic Modules](#dynamic-modules)
 - [CQRS Pattern Support](#cqrs-pattern-support)
 - [Circular Dependencies](#circular-dependencies)
@@ -460,7 +462,7 @@ Use native ES decorators (Stage 3) to define routes directly in controller metho
 While decorators can introduce "magic" especially in business logic, they work well for infrastructure concerns like routing.
 
 ```typescript
-import { controller, GET, POST, before, after } from "awilix-modular";
+import { controller, GET, POST, before, after, schema } from "awilix-modular";
 import type { Express } from "express";
 import { UserModuleDeps } from "./user.module";
 import { authMiddleware, logMiddleware } from "./middlewares";
@@ -479,6 +481,26 @@ export class UserController {
   }
 
   @POST()
+  @schema({
+    body: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        email: { type: "string", format: "email" },
+      },
+      required: ["name", "email"],
+    },
+    response: {
+      201: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          email: { type: "string" },
+        },
+      },
+    },
+  })
   async createUser(req, res) {
     const user = await this.userService.createUser(req.body);
 
@@ -487,7 +509,222 @@ export class UserController {
 }
 ```
 
-Available decorators: `@controller`, `@GET`, `@POST`, `@PUT`, `@PATCH`, `@DELETE`, `@HEAD`, `@OPTIONS`, `@before`, `@after`
+Available decorators: `@controller`, `@GET`, `@POST`, `@PUT`, `@PATCH`, `@DELETE`, `@HEAD`, `@OPTIONS`, `@before`, `@after`, `@schema`
+
+The `@schema` decorator defines JSON Schema validation and OpenAPI documentation for a route. It works with the `beforeRouteRegistered` hook to enable automatic validation and API documentation generation.
+
+## OpenAPI/Swagger Integration
+
+Awilix-modular provides `OpenAPIBuilder` to automatically generate OpenAPI/Swagger documentation from route schemas and set up custom validators. This works seamlessly with JSON Schema libraries like TypeBox.
+
+> [!NOTE]
+> **This is particularly useful for Express applications.** Fastify and Hono already provide schema validation and OpenAPI generation out of the box through their ecosystems (`@fastify/swagger`, `@hono/zod-openapi`). For Express and other frameworks without built-in schema support, `OpenAPIBuilder` bridges this gap by providing similar functionality.
+
+### Using OpenAPIBuilder with beforeRouteRegistered Hook
+
+The `beforeRouteRegistered` hook allows you to intercept route registration to:
+
+1. Build OpenAPI/Swagger documentation from schema decorators
+2. Set up custom validation middleware based on JSON schemas
+
+```typescript
+import { DIContext, OpenAPIBuilder } from "awilix-modular";
+import express from "express";
+import Ajv from "ajv";
+import swaggerUi from "swagger-ui-express";
+
+const app = express();
+const openapiBuilder = new OpenAPIBuilder();
+const ajv = new Ajv({ coerceTypes: true, removeAdditional: true });
+
+DIContext.create(AppModule, {
+  framework: app,
+  beforeRouteRegistered: ({ method, path, schema }) => {
+    // 1. Register route for OpenAPI documentation
+    openapiBuilder.registerRoute(method, path, schema);
+
+    // 2. Create custom validation middleware from JSON schema
+    const validate = ajv.compile({
+      type: "object",
+      properties: {
+        ...(schema.body && { body: schema.body }),
+        ...(schema.querystring && { query: schema.querystring }),
+        ...(schema.params && { params: schema.params }),
+        ...(schema.headers && { headers: schema.headers }),
+      },
+    });
+
+    // Return middleware to be applied to this route
+    return [
+      (req, res, next) => {
+        const valid = validate({
+          body: req.body,
+          query: req.query,
+          params: req.params,
+          headers: req.headers,
+        });
+
+        if (!valid) {
+          return res.status(400).json({
+            error: "Validation failed",
+            details: validate.errors,
+          });
+        }
+        next();
+      },
+    ];
+  },
+});
+
+const openapiSpec = {
+  openapi: "3.0.0",
+  info: {
+    title: "My API",
+    description: "API with automatic OpenAPI generation",
+  },
+  paths: openapiBuilder.buildPaths(),
+};
+
+// Setup Swagger UI
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
+
+// Start server
+app.listen(3000, () => {
+  console.log("Server: http://localhost:3000");
+  console.log("API Docs: http://localhost:3000/api-docs");
+});
+```
+
+> [!TIP]
+> The `beforeRouteRegistered` hook returns an array of middleware functions that will be automatically applied to the route before your handler executes. This is perfect for validation, authentication, or logging middleware.
+
+> [!NOTE]
+> See the [express-swagger example](./examples/express-swagger) for a complete implementation including Swagger UI setup and TypeBox integration.
+
+## Type-Safe Request/Response
+
+When using route schemas with TypeBox or JSON Schema, you can create type-safe Request and Response types that automatically infer types from your schemas. This provides full TypeScript autocomplete and type checking for route parameters, query strings, request bodies, and responses.
+
+### Express Type Safety
+
+Create custom Request and Response types that extract TypeScript types from your route schemas:
+
+```typescript
+import type {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from "express";
+import type { Static, TSchema } from "@sinclair/typebox";
+import type { RouteSchema } from "awilix-modular";
+
+export type Request<S extends RouteSchema> = ExpressRequest<
+  S["params"] extends TSchema ? Static<S["params"]> : any,
+  any,
+  S["body"] extends TSchema ? Static<S["body"]> : any,
+  S["querystring"] extends TSchema ? Static<S["querystring"]> : any
+>;
+
+export type Response<S extends RouteSchema> = Omit<
+  ExpressResponse,
+  "status" | "json" | "send"
+> & {
+  status<Code extends keyof S["response"] & number>(
+    code: Code,
+  ): Omit<ExpressResponse, "json" | "send"> & {
+    json(body: ResponseBodyForStatus<S, Code>): ExpressResponse;
+    send(body: ResponseBodyForStatus<S, Code>): ExpressResponse;
+  };
+  json(
+    body: 200 extends keyof S["response"] ? ResponseBodyForStatus<S, 200> : any,
+  ): ExpressResponse;
+};
+
+type ResponseBodyForStatus<
+  S extends RouteSchema,
+  Code extends keyof S["response"],
+> = S["response"][Code] extends TSchema ? Static<S["response"][Code]> : any;
+```
+
+### Fastify Type Safety
+
+For Fastify, combine with TypeBox type provider for full type inference:
+
+```typescript
+import type { FastifyRequest, FastifyReply } from "fastify";
+import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+import type { Static, TSchema } from "@sinclair/typebox";
+import type { RouteSchema } from "awilix-modular";
+
+export type Request<S extends RouteSchema> = FastifyRequest<{
+  Querystring: S["querystring"] extends TSchema
+    ? Static<S["querystring"]>
+    : unknown;
+  Params: S["params"] extends TSchema ? Static<S["params"]> : unknown;
+  Body: S["body"] extends TSchema ? Static<S["body"]> : unknown;
+}>;
+
+export type Reply<S extends RouteSchema> = FastifyReply<
+  RouteGenericInterface,
+  RawServerDefault,
+  RawRequestDefaultExpression,
+  RawReplyDefaultExpression,
+  ContextConfigDefault,
+  S,
+  TypeBoxTypeProvider
+>;
+```
+
+### Usage in Controllers
+
+Once defined, use these types in your controllers for full type safety:
+
+```typescript
+import { GET, schema } from "awilix-modular";
+import { Type } from "@sinclair/typebox";
+import type { Request, Response } from "./types";
+
+const GetUserSchema = {
+  params: Type.Object({
+    id: Type.String(),
+  }),
+  querystring: Type.Object({
+    includeOrders: Type.Optional(Type.Boolean()),
+  }),
+  response: {
+    200: Type.Object({
+      id: Type.String(),
+      name: Type.String(),
+      email: Type.String(),
+    }),
+  },
+};
+
+export class UserController {
+  @GET("/users/:id")
+  @schema(GetUserSchema)
+  async getUser(
+    req: Request<typeof GetUserSchema>,
+    res: Response<typeof GetUserSchema>,
+  ) {
+    // TypeScript knows req.params.id is a string
+    // TypeScript knows req.query.includeOrders is boolean | undefined
+    const user = await this.userService.getUser(req.params.id);
+
+    // TypeScript enforces the response shape matches the schema along with status
+    res.status(200).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+    });
+  }
+}
+```
+
+> [!TIP]
+> For complete type-safe implementations, see:
+>
+> - [Express example](./examples/express-swagger/src/types.ts) - Type-safe Request/Response with schema validation
+> - [Fastify example](./examples/fastify-cqrs/src/types.ts) - Full TypeBox integration with Fastify type provider
 
 ## Dynamic Modules
 
