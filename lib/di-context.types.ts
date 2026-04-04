@@ -330,7 +330,26 @@ export function isClassProvider<T extends object>(
 export function isCostructorProvider<T extends object>(
 	provider: unknown,
 ): provider is ConstructorProvider<T> {
-	return typeof provider === "function" && "prototype" in provider;
+	if (typeof provider !== "function") return false;
+
+	// Arrow functions don't have prototype
+	if (!("prototype" in provider)) return false;
+
+	const proto = provider.prototype;
+
+	if (!proto || typeof proto !== "object") return false;
+
+	const protoKeys = Object.getOwnPropertyNames(proto);
+
+	if (
+		protoKeys.length === 0 ||
+		(protoKeys.length === 1 && protoKeys[0] === "constructor")
+	) {
+		return provider.toString().trim().startsWith("class");
+	}
+
+	// If prototype has methods/properties, it's a class
+	return true;
 }
 
 export function isPrimitive(provider: unknown): provider is PrimitiveProvider {
