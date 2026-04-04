@@ -1,6 +1,6 @@
 import { AwilixResolutionError, Lifetime } from "awilix";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { controller, GET, schema } from "../lib/decorators/decorators.js";
+import { controller, GET, POST, schema } from "../lib/decorators/decorators.js";
 import * as ERRORS from "../lib/di-context.errors.js";
 import { DIContext, type DiContextOptions } from "../lib/di-context.js";
 import {
@@ -503,6 +503,88 @@ describe("ControllerProcessor", () => {
 
 			const routeCall = mockFastify.route.mock.calls[0][0];
 			expect(routeCall.schema).toEqual({});
+		});
+	});
+
+	describe("beforeRouteRegistered Callback", () => {
+		it("should call beforeRouteRegistered with route registration params", () => {
+			const beforeRouteRegistered = vi.fn();
+
+			const testSchema = {
+				querystring: { type: "object" },
+				response: { 200: { type: "object" } },
+			};
+
+			class TestController {
+				@GET("/api/users")
+				@schema(testSchema)
+				getUsers() {}
+
+				@POST("/api/user")
+				@schema(testSchema)
+				createUser() {}
+			}
+
+			registerModule(
+				{
+					name: "TestModule",
+					controllers: [TestController],
+				},
+				{ beforeRouteRegistered },
+			);
+
+			expect(beforeRouteRegistered).toHaveBeenCalledTimes(2);
+			expect(beforeRouteRegistered).toHaveBeenCalledWith({
+				method: "GET",
+				path: "/api/users",
+				schema: testSchema,
+			});
+			expect(beforeRouteRegistered).toHaveBeenCalledWith({
+				method: "POST",
+				path: "/api/user",
+				schema: testSchema,
+			});
+		});
+
+		it("should inject middleware returned from beforeRouteRegistered into Express route", () => {
+			const validationMiddleware = vi.fn((_, __, next) => next());
+			const loggingMiddleware = vi.fn((_, __, next) => next());
+
+			const beforeRouteRegistered = vi.fn(() => [
+				validationMiddleware,
+				loggingMiddleware,
+			]);
+
+			class TestController {
+				@GET("/test")
+				getTest() {
+					return "test";
+				}
+			}
+
+			registerModule(
+				{
+					name: "TestModule",
+					controllers: [TestController],
+				},
+				{ beforeRouteRegistered },
+			);
+
+			// Get the registered handler
+			const handlerCall = mockExpress.get.mock.calls.find(
+				(call: any) => call[0] === "/test",
+			);
+
+			// Express registers: [validationMiddleware, loggingMiddleware, wrappedHandler]
+			// The handler at position 1 should be our first middleware
+			const registeredHandler = handlerCall[1];
+
+			// Call the first registered handler (should be validation middleware)
+			const mockNext = vi.fn();
+			registeredHandler({}, {}, mockNext);
+
+			expect(validationMiddleware).toHaveBeenCalledTimes(1);
+			expect(mockNext).toHaveBeenCalledTimes(1);
 		});
 	});
 });

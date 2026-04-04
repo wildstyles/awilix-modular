@@ -23,6 +23,7 @@ import {
 	isFactoryProvider,
 	isForwardRef,
 	isPrimitive,
+	isPlainFunction,
 	type AnyModule as M,
 } from "./di-context.types.js";
 import type { RouteRegistration } from "./openapi-builder.js";
@@ -110,7 +111,6 @@ export class DIContext {
 			([key, provider]) => {
 				this.rootContainer.register({
 					[key]: this.resolveProvider({
-						key,
 						provider,
 						resolutionScope: this.rootContainer,
 						module: rootProvidersModule,
@@ -175,7 +175,6 @@ export class DIContext {
 					([key, provider]) => {
 						scope.register({
 							[key]: this.resolveProvider({
-								key,
 								provider,
 								resolutionScope: importedScope,
 								module: importedModule,
@@ -191,7 +190,6 @@ export class DIContext {
 			([key, provider]) => {
 				scope.register({
 					[key]: this.resolveProvider({
-						key,
 						provider,
 						resolutionScope: scope,
 						module: m,
@@ -212,19 +210,21 @@ export class DIContext {
 	}
 
 	private resolveProvider({
-		key,
 		provider,
 		resolutionScope,
 		module,
 		wrapForExport,
 	}: {
-		key: string;
 		provider: AnyProvider;
 		resolutionScope: AwilixContainer;
 		module: M;
 		wrapForExport?: boolean;
 	}): Resolver<any> {
 		if (isPrimitive(provider)) {
+			return asValue(provider);
+		}
+
+		if (isPlainFunction(provider) && !isCostructorProvider(provider)) {
 			return asValue(provider);
 		}
 
@@ -260,24 +260,20 @@ export class DIContext {
 			);
 		}
 
-		if (isClassProvider(provider)) {
-			const baseResolver = asClass(provider.useClass, resolverOptions);
-			const resolver = provider.allowCircular
-				? this.createProxyResolver(baseResolver, resolverOptions, wrapForExport)
-				: baseResolver;
+		const baseResolver = asClass(provider.useClass, resolverOptions);
+		const resolver = provider.allowCircular
+			? this.createProxyResolver(baseResolver, resolverOptions, wrapForExport)
+			: baseResolver;
 
-			return wrapForExport
-				? asFunction(() => {
-						return resolver.resolve(
-							resolverOptions.lifetime === Lifetime.SINGLETON
-								? resolutionScope
-								: resolutionScope.createScope(),
-						);
-					}, resolverOptions)
-				: resolver;
-		}
-
-		throw new ERRORS.UnsupportedProviderTypeError(key, module.name);
+		return wrapForExport
+			? asFunction(() => {
+					return resolver.resolve(
+						resolverOptions.lifetime === Lifetime.SINGLETON
+							? resolutionScope
+							: resolutionScope.createScope(),
+					);
+				}, resolverOptions)
+			: resolver;
 	}
 
 	private extractResolverOptions(

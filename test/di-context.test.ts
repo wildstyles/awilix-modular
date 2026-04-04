@@ -89,7 +89,19 @@ describe("DIContext", () => {
 		it("should support all provider types and be singletons across modules", () => {
 			class DatabaseConfig extends TestableBase {}
 
+			// Simulate MikroORM's raw function and EntityManager
+			const rawFunction = (sql: string) => ({ __raw: sql });
+			const mockEntityManager = {
+				find: vi.fn(),
+				persist: vi.fn(),
+				flush: vi.fn(),
+			};
+
 			const rootProviders = {
+				// Plain function
+				raw: rawFunction,
+				// Object instance
+				em: mockEntityManager,
 				// Primitives
 				apiUrl: "https://api.example.com",
 				timeout: 3000,
@@ -142,6 +154,18 @@ describe("DIContext", () => {
 			expect(scope.resolve("isProduction")).toBe(false);
 			// Plain object
 			expect(scope.resolve("appConfig")).toEqual({ env: "test", debug: true });
+
+			// Plain function (MikroORM's raw)
+			const resolvedRaw = scope.resolve("raw");
+			expect(resolvedRaw).toBe(rawFunction);
+			expect(resolvedRaw("SELECT * FROM users")).toEqual({
+				__raw: "SELECT * FROM users",
+			});
+
+			// Object instance (MikroORM's EntityManager)
+			const resolvedEm = scope.resolve("em");
+			expect(resolvedEm).toBe(mockEntityManager);
+			expect(resolvedEm.find).toBe(mockEntityManager.find);
 
 			// Factory provider
 			const database = scope.resolve<DatabaseConfig>("database");
@@ -216,17 +240,6 @@ describe("DIContext", () => {
 					},
 				});
 			}).toThrow(ERRORS.RootProviderNameConflictError);
-		});
-
-		it("should throw an error when provider type is unsupported", () => {
-			expect(() => {
-				registerModule({
-					name: "InvalidProviderModule",
-					providers: {
-						invalidService: () => "" as any,
-					},
-				});
-			}).toThrow(ERRORS.UnsupportedProviderTypeError);
 		});
 
 		it("should throw an error when factory provider depends on non-existent provider", () => {

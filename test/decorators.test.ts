@@ -12,7 +12,11 @@ import {
 	schema,
 } from "../lib/decorators/decorators.js";
 import { HttpVerbs } from "../lib/decorators/http-verbs.js";
-import { type IState, STATE } from "../lib/decorators/state-util.js";
+import {
+	type IState,
+	STATE,
+	hasValidationSchema,
+} from "../lib/decorators/state-util.js";
 
 /**
  * Helper function to get decorator state from a class
@@ -233,6 +237,46 @@ describe("Decorators", () => {
 			const routeState = state?.methods.get("getUsers");
 
 			expect(routeState?.schema).toEqual(testSchema);
+		});
+	});
+
+	describe("hasValidationSchema", () => {
+		it("should return true when schema has body", () => {
+			expect(hasValidationSchema({ body: { type: "object" } })).toBe(true);
+		});
+
+		it("should return true when schema has querystring", () => {
+			expect(hasValidationSchema({ querystring: { type: "object" } })).toBe(
+				true,
+			);
+		});
+
+		it("should return true when schema has params", () => {
+			expect(hasValidationSchema({ params: { type: "object" } })).toBe(true);
+		});
+
+		it("should return true when schema has headers", () => {
+			expect(hasValidationSchema({ headers: { type: "object" } })).toBe(true);
+		});
+
+		it("should return false when schema has only response", () => {
+			expect(
+				hasValidationSchema({ response: { 200: { type: "object" } } }),
+			).toBe(false);
+		});
+
+		it("should return false when schema has only metadata fields", () => {
+			expect(
+				hasValidationSchema({
+					description: "Test endpoint",
+					summary: "Test",
+					tags: ["test"],
+				}),
+			).toBe(false);
+		});
+
+		it("should return false when schema is empty", () => {
+			expect(hasValidationSchema({})).toBe(false);
 		});
 	});
 });

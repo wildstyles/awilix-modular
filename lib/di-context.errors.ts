@@ -1,12 +1,3 @@
-export class UnsupportedProviderTypeError extends Error {
-	constructor(providerKey: string, moduleName: string) {
-		super(
-			`Unsupported provider type for "${providerKey}" in module "${moduleName}"`,
-		);
-		this.name = "UnsupportedProviderTypeError";
-	}
-}
-
 export class DuplicateControllersInModuleError extends Error {
 	constructor(moduleName: string) {
 		super(

@@ -66,6 +66,7 @@ type ClassProvider<T extends object> = {
 type ConstructorProvider<T extends object = object> = Constructor<T>;
 
 type PrimitiveProvider = string | number | boolean | symbol | bigint;
+type FunctionProvider = (...args: any[]) => any;
 
 type Provider<
 	T extends object,
@@ -80,7 +81,8 @@ export type AnyProvider =
 	| ClassProvider<any>
 	| ConstructorProvider<any>
 	| PrimitiveProvider
-	| UnknownRecord;
+	| FunctionProvider
+	| object;
 
 // ============================================================================
 // Typed module definition with deps
@@ -338,6 +340,15 @@ export function isPrimitive(provider: unknown): provider is PrimitiveProvider {
 		typeof provider === "boolean" ||
 		typeof provider === "symbol" ||
 		typeof provider === "bigint"
+	);
+}
+
+export function isPlainFunction(
+	provider: unknown,
+): provider is FunctionProvider {
+	return (
+		typeof provider === "function" &&
+		(!provider.prototype || Object.keys(provider.prototype).length === 0)
 	);
 }
 
