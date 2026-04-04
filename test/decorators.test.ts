@@ -13,9 +13,9 @@ import {
 } from "../lib/decorators/decorators.js";
 import { HttpVerbs } from "../lib/decorators/http-verbs.js";
 import {
+	hasValidationSchema,
 	type IState,
 	STATE,
-	hasValidationSchema,
 } from "../lib/decorators/state-util.js";
 
 /**

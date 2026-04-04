@@ -22,8 +22,8 @@ import {
 	isCostructorProvider,
 	isFactoryProvider,
 	isForwardRef,
-	isPrimitive,
 	isPlainFunction,
+	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
 import type { RouteRegistration } from "./openapi-builder.js";
