@@ -1,6 +1,10 @@
 import Ajv from "ajv";
 import type { Request, Response, NextFunction } from "express";
-import { hasValidationSchema, type RouteSchema } from "awilix-modular";
+import {
+	hasValidationSchema,
+	type RouteSchema,
+	httpException,
+} from "awilix-modular";
 
 const ajv = new Ajv.default({ coerceTypes: true, removeAdditional: true });
 
@@ -11,25 +15,26 @@ export const createValidationMiddleware = (schema: RouteSchema) => {
 		type: "object",
 		properties: {
 			...(!!schema.body && { body: schema.body }),
-			...(!!schema.querystring && { query: schema.querystring }),
+			...(!!schema.querystring && { querystring: schema.querystring }),
 			...(!!schema.params && { params: schema.params }),
 			...(!!schema.headers && { headers: schema.headers }),
 		},
 	});
 
-	return (req: Request, res: Response, next: NextFunction) => {
+	return (req: Request, _: Response, next: NextFunction) => {
 		const valid = validate({
 			body: req.body,
-			query: req.query,
+			querystring: req.query,
 			params: req.params,
 			headers: req.headers,
 		});
 
 		if (!valid) {
-			return res.status(400).json({
-				error: "Validation failed",
-				details: validate.errors,
-			});
+			const error = validate.errors?.[0];
+
+			throw httpException.badRequest(
+				error ? `${error.instancePath} ${error.message}` : "Validation error",
+			);
 		}
 
 		next();

@@ -1,4 +1,5 @@
 import { type Static, Type } from "@sinclair/typebox";
+import { HttpStatus } from "awilix-modular";
 
 export const GetCatsQuerySchema = Type.Object({
 	breed: Type.String(),
@@ -22,7 +23,7 @@ export const GetCatsResponseSchema = Type.Object({
 export const GetCatsSchema = {
 	querystring: GetCatsQuerySchema,
 	response: {
-		200: GetCatsResponseSchema,
+		[HttpStatus.OK]: GetCatsResponseSchema,
 	},
 };
 

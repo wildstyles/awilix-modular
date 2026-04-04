@@ -3,6 +3,7 @@ import { buildApp } from "@/app.js";
 import { AppModule } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
 import { createValidationMiddleware } from "./ajv-validation.middleware.js";
+import { errorHandler } from "./error-handler.middleware.js";
 
 async function bootstrap() {
 	const app = buildApp();
@@ -18,6 +19,8 @@ async function bootstrap() {
 	});
 
 	setupSwagger(app, openapiBuilder.buildPaths());
+
+	app.use(errorHandler);
 
 	const PORT = 3000;
 
