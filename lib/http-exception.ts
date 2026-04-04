@@ -23,10 +23,12 @@ export enum HttpStatus {
 	HTTP_VERSION_NOT_SUPPORTED = 505,
 }
 
-export class HttpException extends Error {
+export class HttpException<
+	TStatus extends HttpStatus = HttpStatus,
+> extends Error {
 	constructor(
 		public readonly message: string,
-		public readonly statusCode: HttpStatus,
+		public readonly statusCode: TStatus,
 		public readonly response?: Record<string, any> | null,
 	) {
 		super(message);
@@ -36,7 +38,7 @@ export class HttpException extends Error {
 
 	getResponse(): {
 		message: string;
-		statusCode: HttpStatus;
+		statusCode: TStatus;
 		[key: string]: any;
 	} {
 		return {
@@ -46,7 +48,7 @@ export class HttpException extends Error {
 		};
 	}
 
-	getStatus(): HttpStatus {
+	getStatus(): TStatus {
 		return this.statusCode;
 	}
 }
