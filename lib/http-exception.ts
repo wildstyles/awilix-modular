@@ -24,10 +24,11 @@ export enum HttpStatus {
 }
 
 export class HttpException<
+	TMessage extends string,
 	TStatus extends HttpStatus = HttpStatus,
 > extends Error {
 	constructor(
-		public readonly message: string,
+		public readonly message: TMessage,
 		public readonly statusCode: TStatus,
 		public readonly response?: Record<string, any> | null,
 	) {
@@ -37,7 +38,7 @@ export class HttpException<
 	}
 
 	getResponse(): {
-		message: string;
+		message: TMessage;
 		statusCode: TStatus;
 		[key: string]: any;
 	} {
@@ -53,87 +54,61 @@ export class HttpException<
 	}
 }
 
-export const httpException = {
-	badRequest: (message = "Bad Request", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.BAD_REQUEST, response),
-
-	unauthorized: (message = "Unauthorized", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.UNAUTHORIZED, response),
-
-	forbidden: (message = "Forbidden", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.FORBIDDEN, response),
-
-	notFound: (message = "Not Found", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.NOT_FOUND, response),
-
-	methodNotAllowed: (
-		message = "Method Not Allowed",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.METHOD_NOT_ALLOWED, response),
-
-	notAcceptable: (message = "Not Acceptable", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.NOT_ACCEPTABLE, response),
-
-	requestTimeout: (
-		message = "Request Timeout",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.REQUEST_TIMEOUT, response),
-
-	conflict: (message = "Conflict", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.CONFLICT, response),
-
-	gone: (message = "Gone", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.GONE, response),
-
-	preconditionFailed: (
-		message = "Precondition Failed",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.PRECONDITION_FAILED, response),
-
-	payloadTooLarge: (
-		message = "Payload Too Large",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.PAYLOAD_TOO_LARGE, response),
-
-	unsupportedMediaType: (
-		message = "Unsupported Media Type",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.UNSUPPORTED_MEDIA_TYPE, response),
-
-	imATeapot: (message = "I'm a teapot", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.I_AM_A_TEAPOT, response),
-
-	unprocessableEntity: (
-		message = "Unprocessable Entity",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.UNPROCESSABLE_ENTITY, response),
-
-	internalServerError: (
-		message = "Internal Server Error",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.INTERNAL_SERVER_ERROR, response),
-
-	notImplemented: (
-		message = "Not Implemented",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.NOT_IMPLEMENTED, response),
-
-	badGateway: (message = "Bad Gateway", response?: Record<string, any>) =>
-		new HttpException(message, HttpStatus.BAD_GATEWAY, response),
-
-	serviceUnavailable: (
-		message = "Service Unavailable",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.SERVICE_UNAVAILABLE, response),
-
-	gatewayTimeout: (
-		message = "Gateway Timeout",
-		response?: Record<string, any>,
-	) => new HttpException(message, HttpStatus.GATEWAY_TIMEOUT, response),
-
-	httpVersionNotSupported: (
-		message = "HTTP Version Not Supported",
-		response?: Record<string, any>,
+const createFactory =
+	<TDefault extends string, TStatus extends HttpStatus>(
+		defaultMessage: TDefault,
+		status: TStatus,
 	) =>
-		new HttpException(message, HttpStatus.HTTP_VERSION_NOT_SUPPORTED, response),
+	<M extends string = TDefault>(message?: M, response?: Record<string, any>) =>
+		new HttpException(
+			(message ?? defaultMessage) as M extends undefined ? TDefault : M,
+			status,
+			response,
+		);
+
+export const httpException = {
+	badRequest: createFactory("Bad Request", HttpStatus.BAD_REQUEST),
+	unauthorized: createFactory("Unauthorized", HttpStatus.UNAUTHORIZED),
+	forbidden: createFactory("Forbidden", HttpStatus.FORBIDDEN),
+	notFound: createFactory("Not Found", HttpStatus.NOT_FOUND),
+	methodNotAllowed: createFactory(
+		"Method Not Allowed",
+		HttpStatus.METHOD_NOT_ALLOWED,
+	),
+	notAcceptable: createFactory("Not Acceptable", HttpStatus.NOT_ACCEPTABLE),
+	requestTimeout: createFactory("Request Timeout", HttpStatus.REQUEST_TIMEOUT),
+	conflict: createFactory("Conflict", HttpStatus.CONFLICT),
+	gone: createFactory("Gone", HttpStatus.GONE),
+	preconditionFailed: createFactory(
+		"Precondition Failed",
+		HttpStatus.PRECONDITION_FAILED,
+	),
+	payloadTooLarge: createFactory(
+		"Payload Too Large",
+		HttpStatus.PAYLOAD_TOO_LARGE,
+	),
+	unsupportedMediaType: createFactory(
+		"Unsupported Media Type",
+		HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+	),
+	imATeapot: createFactory("I'm a teapot", HttpStatus.I_AM_A_TEAPOT),
+	unprocessableEntity: createFactory(
+		"Unprocessable Entity",
+		HttpStatus.UNPROCESSABLE_ENTITY,
+	),
+	internalServerError: createFactory(
+		"Internal Server Error",
+		HttpStatus.INTERNAL_SERVER_ERROR,
+	),
+	notImplemented: createFactory("Not Implemented", HttpStatus.NOT_IMPLEMENTED),
+	badGateway: createFactory("Bad Gateway", HttpStatus.BAD_GATEWAY),
+	serviceUnavailable: createFactory(
+		"Service Unavailable",
+		HttpStatus.SERVICE_UNAVAILABLE,
+	),
+	gatewayTimeout: createFactory("Gateway Timeout", HttpStatus.GATEWAY_TIMEOUT),
+	httpVersionNotSupported: createFactory(
+		"HTTP Version Not Supported",
+		HttpStatus.HTTP_VERSION_NOT_SUPPORTED,
+	),
 };
