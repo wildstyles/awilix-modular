@@ -12,7 +12,7 @@ import {
 	type Resolver,
 } from "awilix";
 import { ControllerProcessor } from "./controller-processor.js";
-import type { Handler } from "./cqrs/cqrs.types.js";
+import type { AnyContract, Handler } from "./cqrs/cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
 	type AnyProvider,
@@ -31,8 +31,8 @@ import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
 export interface DiContextOptions {
 	framework: unknown;
-	onQueryHandler?: (resolveHandler: () => Handler<any, string>) => void;
-	onCommandHandler?: (resolveHandler: () => Handler<any, string>) => void;
+	onQueryHandler?: (resolveHandler: () => Handler<AnyContract>) => void;
+	onCommandHandler?: (resolveHandler: () => Handler<AnyContract>) => void;
 	beforeRouteRegistered?: (params: RouteRegistration) => any[];
 	containerOptions?: ContainerOptions;
 	rootProviders?: Record<string, AnyProvider>;

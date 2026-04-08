@@ -1,4 +1,4 @@
-import type { Contract, Handler } from "awilix-modular";
+import type { Contract, Handler, MetaFromTags } from "awilix-modular";
 import type { Deps } from "./cats.module.js";
 import type {
 	GetCatsQuery as Payload,
@@ -14,12 +14,29 @@ export class GetCatsQueryHandler implements Handler<GetCatsQueryContract> {
 	static contract: Contract<typeof QUERY_KEY, Payload, Response>;
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
+	// Single source of truth - all types are inferred from this
+	readonly middlewareTags = ["tenant", "logging", "auth"] as const;
+	readonly excludeMiddlewareTags = ["logging"] as const;
+
 	constructor(
 		private readonly catsService: Deps["catsService"],
 		private readonly dogsService: Deps["dogsService"],
 	) {}
 
-	async executor(payload: Payload): Promise<Response> {
+	async executor(
+		payload: Payload,
+		meta: MetaFromTags<
+			typeof this.middlewareTags,
+			typeof this.excludeMiddlewareTags
+		>,
+	): Promise<Response> {
+		// meta is now typed as auth + tenant (logging is excluded)
+		// You get autocomplete for: meta.userId, meta.roles, meta.tenantId, meta.tenantName
+		// But NOT meta.requestId or meta.timestamp (logging was excluded)
+		console.log(
+			`[GetCatsQueryHandler] User ${meta.userId} from tenant ${meta.tenantId}`,
+		);
+
 		return {
 			handlerId: this.instanceId,
 			dogsServiceId: this.dogsService.getInstanceId(),

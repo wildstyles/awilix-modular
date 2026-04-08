@@ -1,4 +1,4 @@
-import { type Bus, DIContext, initializeBus } from "awilix-modular";
+import { DIContext, initializeBus } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import {
@@ -7,14 +7,32 @@ import {
 	type QueryContracts,
 } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
+import {
+	authMiddleware,
+	loggingMiddleware,
+	tenantMiddleware,
+} from "./middlewares.js";
+
+// Create query bus with type-safe middleware chaining
+const queryBusInstance = initializeBus<QueryContracts>()
+	.addMiddleware(loggingMiddleware)
+	// .addMiddleware(tenantMiddleware)
+	.addMiddleware(authMiddleware)
+	.addMiddleware(tenantMiddleware)
+	// .addMiddleware(tenantMiddleware)
+	.build();
+
+// Missing loggingMiddleware - error will appear in module declaration below
+const commandBusInstance = initializeBus<CommandContracts>()
+	.addMiddleware(authMiddleware)
+	.addMiddleware(tenantMiddleware)
+	.addMiddleware(loggingMiddleware) // Uncomment to fix!
+	.build();
 
 async function bootstrap() {
 	const fastify = buildApp();
 
 	await setupSwagger(fastify);
-
-	const queryBusInstance = initializeBus<QueryContracts>();
-	const commandBusInstance = initializeBus<CommandContracts>();
 
 	fastify.decorate("queryBus", queryBusInstance);
 	fastify.decorate("commandBus", commandBusInstance);
@@ -22,11 +40,18 @@ async function bootstrap() {
 	DIContext.create(AppModule, {
 		framework: fastify,
 		onQueryHandler: (resolveHandler) => {
-			const { key } = resolveHandler();
+			const handler = resolveHandler();
 
-			fastify.queryBus.register(key, (...args) => {
-				return resolveHandler().executor(...args);
-			});
+			queryBusInstance.register(
+				handler.key,
+				(payload, meta) => {
+					return resolveHandler().executor(payload, meta);
+				},
+				{
+					middlewareTags: handler.middlewareTags,
+					excludeMiddlewareTags: handler.excludeMiddlewareTags,
+				},
+			);
 		},
 	});
 
@@ -43,7 +68,17 @@ bootstrap();
 
 declare module "fastify" {
 	interface FastifyInstance {
-		queryBus: Bus<QueryContracts>;
-		commandBus: Bus<CommandContracts>;
+		queryBus: typeof queryBusInstance;
+		commandBus: typeof commandBusInstance;
+	}
+}
+
+declare module "awilix-modular" {
+	interface MiddlewareTagRegistry {
+		auth: { userId: string; roles: string[] };
+
+		logging: { requestId: string; timestamp: number };
+
+		tenant: { tenantId: string; tenantName: string };
 	}
 }
