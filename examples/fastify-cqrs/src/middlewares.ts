@@ -2,16 +2,16 @@ import type { MiddlewareConfig } from "awilix-modular";
 
 export const authMiddleware: MiddlewareConfig<"auth"> = {
 	tag: "auth",
-	execute: async (payload, meta, next) => {
+	execute: async (payload, context, next) => {
 		const mockUser = {
 			userId: "user-123",
 			roles: ["admin", "user"],
 		};
 
-		console.log("[Auth Middleware] Adding user to meta:", mockUser.userId);
+		console.log("[Auth Middleware] Adding user to context:", mockUser.userId);
 
 		return next(payload, {
-			...meta,
+			...context,
 			...mockUser,
 		});
 	},
@@ -19,7 +19,7 @@ export const authMiddleware: MiddlewareConfig<"auth"> = {
 
 export const loggingMiddleware: MiddlewareConfig<"logging"> = {
 	tag: "logging",
-	execute: async (payload, meta, next) => {
+	execute: async (payload, context, next) => {
 		const requestId = `req-${Math.random().toString(36).substring(7)}`;
 		const timestamp = Date.now();
 
@@ -28,7 +28,7 @@ export const loggingMiddleware: MiddlewareConfig<"logging"> = {
 		);
 
 		return next(payload, {
-			...meta,
+			...context,
 			requestId,
 			timestamp,
 		});
@@ -38,11 +38,11 @@ export const loggingMiddleware: MiddlewareConfig<"logging"> = {
 export const tenantMiddleware: MiddlewareConfig<"tenant", "auth"> = {
 	tag: "tenant",
 	requires: "auth", // ✅ Constrained to the second generic parameter!
-	execute: async (payload, meta, next) => {
-		// meta is now typed! It has userId and roles from auth middleware
-		// Try typing "meta." and you'll see autocomplete for userId, roles
+	execute: async (payload, context, next) => {
+		// context is now typed! It has userId and roles from auth middleware
+		// Try typing "context." and you'll see autocomplete for userId, roles
 		console.log(
-			`[Tenant Middleware] User ${meta.userId} with roles ${meta.roles.join(", ")}`,
+			`[Tenant Middleware] User ${context.userId} with roles ${context.roles.join(", ")}`,
 		);
 
 		// In a real app, you'd extract tenant from subdomain or header
@@ -52,14 +52,14 @@ export const tenantMiddleware: MiddlewareConfig<"tenant", "auth"> = {
 		};
 
 		console.log(
-			"[Tenant Middleware] Adding tenant to meta:",
+			"[Tenant Middleware] Adding tenant to context:",
 			mockTenant.tenantName,
 		);
 
-		// ✅ next() now REQUIRES both auth meta AND tenant meta!
+		// ✅ next() now REQUIRES both auth context AND tenant context!
 		// Try removing tenantId - TypeScript will error!
 		return next(payload, {
-			...meta, // auth properties: userId, roles
+			...context, // auth properties: userId, roles
 			...mockTenant, // tenant properties: tenantId, tenantName (REQUIRED!)
 		});
 	},

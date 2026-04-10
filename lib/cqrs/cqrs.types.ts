@@ -6,18 +6,18 @@ export type Contract<K extends string, P, R> = {
 };
 
 // Tag Registry - can be extended via module augmentation
-// Simple mapping of tag name to meta type
+// Simple mapping of tag name to context type
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
 export interface MiddlewareTagRegistry {}
 
-// Check if a tag's dependencies are satisfied by accumulated meta
+// Check if a tag's dependencies are satisfied by accumulated context
 export type AreDependenciesSatisfied<
-	AccumulatedMeta extends AnyMeta,
+	AccumulatedContext extends AnyContext,
 	RequiredTag extends keyof MiddlewareTagRegistry,
-> = AccumulatedMeta extends MiddlewareTagRegistry[RequiredTag] ? true : false;
+> = AccumulatedContext extends MiddlewareTagRegistry[RequiredTag] ? true : false;
 
-// Helper: compute meta type from tags with optional exclusions
-export type MetaFromTags<
+// Helper: compute context type from tags with optional exclusions
+export type ContextFromTags<
 	Tags extends
 		readonly (keyof MiddlewareTagRegistry)[] = (keyof MiddlewareTagRegistry)[],
 	ExcludeTags extends readonly (keyof MiddlewareTagRegistry)[] = never[],
@@ -31,31 +31,31 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
 	? I
 	: never;
 
-// Default meta when no tags specified
+// Default context when no tags specified
 // biome-ignore lint/complexity/noBannedTypes: {} is the correct type for empty object
-export type EmptyMeta = {};
+export type EmptyContext = {};
 
-export type AnyMeta = Record<string, unknown>;
+export type AnyContext = Record<string, unknown>;
 
 export type AnyContract = Contract<string, unknown, unknown>;
 
-// Handler now with Meta as second param (before K which has default)
+// Handler now with Context as second param (before K which has default)
 export interface Handler<
 	C extends AnyContract,
-	M extends MetaFromTags = MetaFromTags,
+	Ctx extends ContextFromTags = ContextFromTags,
 	K extends keyof C = keyof C,
 > {
 	readonly key: K;
 	readonly middlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
 	readonly excludeMiddlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
-	executor: Executor<ExtractPayload<C, K>, ExtractResponse<C, K>, M>;
+	executor: Executor<ExtractPayload<C, K>, ExtractResponse<C, K>, Ctx>;
 }
 
 export type Executor<
 	P = unknown,
 	R = unknown,
-	M extends MetaFromTags = MetaFromTags,
-> = (payload: P, meta: M) => Promise<R>;
+	Ctx extends ContextFromTags = ContextFromTags,
+> = (payload: P, context: Ctx) => Promise<R>;
 
 export type ExtractPayload<
 	C extends AnyContract,
@@ -68,12 +68,12 @@ export type ExtractResponse<
 > = C[K]["response"];
 
 export type MiddlewareFn<
-	RequiredMeta extends AnyMeta = EmptyMeta,
+	RequiredContext extends AnyContext = EmptyContext,
 	Tag extends keyof MiddlewareTagRegistry = keyof MiddlewareTagRegistry,
 > = (
 	payload: unknown,
-	meta: RequiredMeta & AnyMeta,
-	next: Executor<unknown, unknown, RequiredMeta & MiddlewareTagRegistry[Tag]>,
+	context: RequiredContext & AnyContext,
+	next: Executor<unknown, unknown, RequiredContext & MiddlewareTagRegistry[Tag]>,
 ) => Promise<unknown>;
 
 // Middleware configuration with optional second generic for requires
@@ -84,7 +84,7 @@ export type MiddlewareConfig<
 	tag: Tag;
 	requires?: [Requires] extends [never] ? undefined : Requires;
 	execute: [Requires] extends [never]
-		? MiddlewareFn<EmptyMeta, Tag>
+		? MiddlewareFn<EmptyContext, Tag>
 		: MiddlewareFn<MiddlewareTagRegistry[Requires], Tag>;
 };
 

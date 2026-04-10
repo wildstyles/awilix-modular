@@ -835,40 +835,40 @@ export const UserModule = createStaticModule<UserModuleDef>({
 });
 ```
 
-### Initializing the Query Bus
+### Initializing the Query Mediator
 
-Set up the query bus during application bootstrap and register handlers using the `onQueryHandler` hook:
+Set up the query mediator during application bootstrap and register handlers using the `onQueryHandler` hook:
 
 ```typescript
-import { type Bus, DIContext, initializeBus } from "awilix-modular";
+import { type Mediator, DIContext, initializeMediator } from "awilix-modular";
 import { AppModule, type QueryContracts } from "./modules";
 import fastify from "fastify";
 
 const app = fastify();
-const queryBus = initializeBus<QueryContracts>();
+const queryMediator = initializeMediator<QueryContracts>();
 
-// Decorate Fastify instance with query bus to access bus through app in controllers
-app.decorate("queryBus", queryBus);
+// Decorate Fastify instance with query mediator to access mediator through app in controllers
+app.decorate("queryMediator", queryMediator);
 
 DIContext.create(AppModule, {
   framework: app,
   onQueryHandler: (resolveHandler) => {
     const { key } = resolveHandler();
-    app.queryBus.register(key, (...args) => resolveHandler().executor(...args));
+    app.queryMediator.register(key, (...args) => resolveHandler().executor(...args));
   },
 });
 
 // Type augmentation for TypeScript
 declare module "fastify" {
   interface FastifyInstance {
-    queryBus: Bus<QueryContracts>;
+    queryMediator: Mediator<QueryContracts>;
   }
 }
 ```
 
 ### Executing Queries
 
-Execute queries from controllers using the type-safe query bus:
+Execute queries from controllers using the type-safe query mediator:
 
 ```typescript
 import type { FastifyInstance } from "fastify";
@@ -877,7 +877,7 @@ class UserController {
   registerRoutes(app: FastifyInstance) {
     app.get("/users/:id", async (req, res) => {
       // full typesafety without depending on implementation
-      const user = await app.queryBus.execute("users/get-user", {
+      const user = await app.queryMediator.execute("users/get-user", {
         userId: req.params.id,
       });
       res.send(user);

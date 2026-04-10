@@ -1,4 +1,4 @@
-import type { Contract, Handler, MetaFromTags } from "awilix-modular";
+import type { Contract, Handler, ContextFromTags } from "awilix-modular";
 import type { Deps } from "./cats.module.js";
 import type {
 	GetCatsQuery as Payload,
@@ -10,6 +10,10 @@ export const QUERY_KEY = "cats/get-cats";
 type GetCatsQueryContract = typeof GetCatsQueryHandler.contract;
 
 export class GetCatsQueryHandler implements Handler<GetCatsQueryContract> {
+	// TODO: all static?
+	//  	static readonly key = "cats/get-cats";
+	// static contract: Contract<typeof GetCatsQueryHandler.key, Payload, Response>;
+
 	readonly key = QUERY_KEY;
 	static contract: Contract<typeof QUERY_KEY, Payload, Response>;
 	private readonly instanceId = Math.random().toString(36).substring(7);
@@ -25,16 +29,16 @@ export class GetCatsQueryHandler implements Handler<GetCatsQueryContract> {
 
 	async executor(
 		payload: Payload,
-		meta: MetaFromTags<
+		context: ContextFromTags<
 			typeof this.middlewareTags,
 			typeof this.excludeMiddlewareTags
 		>,
 	): Promise<Response> {
-		// meta is now typed as auth + tenant (logging is excluded)
-		// You get autocomplete for: meta.userId, meta.roles, meta.tenantId, meta.tenantName
-		// But NOT meta.requestId or meta.timestamp (logging was excluded)
+		// context is now typed as auth + tenant (logging is excluded)
+		// You get autocomplete for: context.userId, context.roles, context.tenantId, context.tenantName
+		// But NOT context.requestId or context.timestamp (logging was excluded)
 		console.log(
-			`[GetCatsQueryHandler] User ${meta.userId} from tenant ${meta.tenantId}`,
+			`[GetCatsQueryHandler] User ${context.userId} from tenant ${context.tenantId}`,
 		);
 
 		return {

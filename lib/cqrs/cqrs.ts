@@ -1,10 +1,10 @@
 import * as errors from "./cqrs.errors.js";
 import type {
 	AnyContract,
-	AnyMeta,
+	AnyContext,
 	AreAllTagsAdded,
 	AreDependenciesSatisfied,
-	EmptyMeta,
+	EmptyContext,
 	Executor,
 	ExtractPayload,
 	ExtractResponse,
@@ -22,8 +22,8 @@ interface HandlerRegistration extends HandlerMiddlewareOptions {
 	executor: Executor;
 }
 
-class BusBuilder<
-	AccumulatedMeta extends AnyMeta = EmptyMeta,
+class MediatorBuilder<
+	AccumulatedContext extends AnyContext = EmptyContext,
 	AddedTags extends keyof MiddlewareTagRegistry = never,
 > {
 	private middlewares: Middleware[] = [];
@@ -34,10 +34,10 @@ class BusBuilder<
 	>(
 		middleware: [Requires] extends [never]
 			? MiddlewareConfig<Tag>
-			: AreDependenciesSatisfied<AccumulatedMeta, Requires> extends true
+			: AreDependenciesSatisfied<AccumulatedContext, Requires> extends true
 				? MiddlewareConfig<Tag, Requires>
 				: never,
-	): BusBuilder<AccumulatedMeta & MiddlewareTagRegistry[Tag], AddedTags | Tag> {
+	): MediatorBuilder<AccumulatedContext & MiddlewareTagRegistry[Tag], AddedTags | Tag> {
 		const { tag, requires } = middleware;
 
 		const isDuplicate = this.middlewares.some((mw) => mw.tag === tag);
@@ -52,39 +52,38 @@ class BusBuilder<
 			throw new errors.MiddlewareRequiresDependencyError(tag, requires);
 		}
 
-		// TODO: fix
-		this.middlewares.push(middleware as any);
+		this.middlewares.push(middleware as Middleware);
 
 		return this;
 	}
 
 	build: AreAllTagsAdded<AddedTags> extends true
-		? <C extends AnyContract>() => Bus<C>
+		? <C extends AnyContract>() => Mediator<C>
 		: never = () => {
-		return new Bus(this.middlewares, busConstructorToken);
+		return new Mediator(this.middlewares, mediatorConstructorToken);
 	};
 }
 
-const busConstructorToken = Symbol("BusConstructorToken");
+const mediatorConstructorToken = Symbol("MediatorConstructorToken");
 
-export class Bus<C extends AnyContract> {
+export class Mediator<C extends AnyContract> {
 	private handlers = new Map<string, HandlerRegistration>();
 	private middlewares: Middleware[];
 
-	constructor(middlewares: Middleware[], token: typeof busConstructorToken) {
-		if (token !== busConstructorToken) {
-			throw new errors.CannotConstructBusDirectly();
+	constructor(middlewares: Middleware[], token: typeof mediatorConstructorToken) {
+		if (token !== mediatorConstructorToken) {
+			throw new errors.CannotConstructMediatorDirectly();
 		}
 
 		this.middlewares = middlewares;
 	}
 
 	static initialize<C extends AnyContract>() {
-		return new Bus<C>([], busConstructorToken);
+		return new Mediator<C>([], mediatorConstructorToken);
 	}
 
 	static initializeBuilder() {
-		return new BusBuilder();
+		return new MediatorBuilder();
 	}
 
 	register(
@@ -122,10 +121,10 @@ export class Bus<C extends AnyContract> {
 		);
 
 		const wrappedExecutor = applicableMiddlewares.reduceRight<
-			Executor<unknown, unknown, AnyMeta>
+			Executor<unknown, unknown, AnyContext>
 		>(
-			(nextExecutor, middleware) => (payload, meta) =>
-				middleware.execute(payload, meta, nextExecutor),
+			(nextExecutor, middleware) => (payload, context) =>
+				middleware.execute(payload, context, nextExecutor),
 			handlerReg.executor,
 		);
 

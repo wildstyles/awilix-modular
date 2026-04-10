@@ -337,7 +337,7 @@ export class UserController {
 
 ## Additional Features 🎁
 
-- **CQRS pattern** with type-safe command/query bus
+- **CQRS pattern** with type-safe command/query mediator
 - **Dynamic modules** with `.forRoot()` pattern
 - **Circular dependencies** support (cleaner than NestJS)
 - **100% test coverage**

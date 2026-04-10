@@ -15,9 +15,12 @@ export class CatsController implements Controller {
 			handler: async (req, res) => {
 				const query = req.query;
 
-				const result = await fastify.queryBus.execute("cats/get-cats", {
-					...query,
-				});
+				const result = await fastify.queryMediator.execute(
+					"cats/get-cats",
+					{
+						...query,
+					},
+				);
 
 				return res
 					.status(200)

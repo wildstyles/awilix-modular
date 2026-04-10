@@ -1,6 +1,6 @@
-export class CannotConstructBusDirectly extends Error {
+export class CannotConstructMediatorDirectly extends Error {
 	constructor() {
-		super("Cannot construct Bus directly. Use Bus.initialize() instead.");
+		super("Cannot construct Mediator directly. Use Mediator.initialize() instead.");
 	}
 }
 

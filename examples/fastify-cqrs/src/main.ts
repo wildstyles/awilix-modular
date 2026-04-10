@@ -1,4 +1,4 @@
-import { DIContext, Bus } from "awilix-modular";
+import { DIContext, Mediator } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import {
@@ -13,32 +13,32 @@ import {
 	tenantMiddleware,
 } from "./middlewares.js";
 
-const queryBusInstance = Bus.initializeBuilder()
+const queryMediatorInstance = Mediator.initializeBuilder()
 	.addMiddleware(loggingMiddleware)
 	.addMiddleware(authMiddleware)
 	.addMiddleware(tenantMiddleware)
 	.build<QueryContracts>();
 
-// Create command bus
-const commandBusInstance = Bus.initialize<CommandContracts>();
+// Create command mediator
+const commandMediatorInstance = Mediator.initialize<CommandContracts>();
 
 async function bootstrap() {
 	const fastify = buildApp();
 
 	await setupSwagger(fastify);
 
-	fastify.decorate("queryBus", queryBusInstance);
-	fastify.decorate("commandBus", commandBusInstance);
+	fastify.decorate("queryMediator", queryMediatorInstance);
+	fastify.decorate("commandMediator", commandMediatorInstance);
 
 	DIContext.create(AppModule, {
 		framework: fastify,
 		onQueryHandler: (resolveHandler) => {
 			const handler = resolveHandler();
 
-			queryBusInstance.register(
+			queryMediatorInstance.register(
 				handler.key,
-				(payload, meta) => {
-					return resolveHandler().executor(payload, meta);
+				(payload, context) => {
+					return resolveHandler().executor(payload, context);
 				},
 				{
 					middlewareTags: handler.middlewareTags,
@@ -61,8 +61,8 @@ bootstrap();
 
 declare module "fastify" {
 	interface FastifyInstance {
-		queryBus: typeof queryBusInstance;
-		commandBus: typeof commandBusInstance;
+		queryMediator: typeof queryMediatorInstance;
+		commandMediator: typeof commandMediatorInstance;
 	}
 }
 
