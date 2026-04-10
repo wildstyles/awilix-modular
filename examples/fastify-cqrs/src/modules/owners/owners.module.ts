@@ -9,6 +9,10 @@ import { CatsModule, type CatsModuleDef } from "../cats/cats.module.js";
 
 import { OwnersService } from "./owners.service.js";
 import { Owners1Service } from "./owners1.service.js";
+import { GetOwnersQueryHandler } from "./get-owners.q-handler.js";
+import { OwnersController } from "./owners.controller.js";
+
+export type OwnersModuleQueryContracts = typeof GetOwnersQueryHandler.contract;
 
 export type OwnersModuleDef = ModuleDef<{
 	providers: {
@@ -26,6 +30,9 @@ export const OwnersModule: StaticModule<OwnersModuleDef> =
 		name: "OwnersModule",
 
 		imports: [forwardRef(() => CatsModule)],
+
+		queryHandlers: [GetOwnersQueryHandler],
+		controllers: [OwnersController],
 
 		providerOptions: {
 			// lifetime: "SCOPED",

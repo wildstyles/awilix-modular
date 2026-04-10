@@ -4,7 +4,6 @@ import {
 	Lifetime,
 } from "awilix";
 import { describe, expect, it, vi } from "vitest";
-import type { Handler } from "../lib/cqrs/cqrs.types.js";
 import * as ERRORS from "../lib/di-context.errors.js";
 import {
 	DIContext,
@@ -186,10 +185,10 @@ describe("DIContext", () => {
 
 			expect(singletonFromModuleA).toBe(singletonFromModuleB);
 
-			// Module providers can access all root providers
+			// Module providers can access all root providers + queryMediator + commandMediator
 			const serviceA = moduleA?.scope.resolve("serviceA");
 			expect(serviceA.getDepKeys().length).toBe(
-				Object.keys(rootProviders).length + 1,
+				Object.keys(rootProviders).length + 3, // +1 for serviceA itself, +2 for mediators
 			);
 		});
 	});
@@ -458,7 +457,7 @@ describe("DIContext", () => {
 			const factoryServiceA = scope.resolve("factoryServiceA");
 			const factoryServiceB = scope.resolve("factoryServiceB");
 
-			expect(serviceA.getDepKeys().length).toBe(4 + rootResolversCount);
+			expect(serviceA.getDepKeys().length).toBe(4 + rootResolversCount + 2); // +2 for mediators
 			expect(serviceA.getDepKeys()).toContain("factoryServiceA");
 			expect(serviceA.getDepKeys()).toContain("factoryServiceB");
 			expect(serviceA.getDepKeys()).toContain("innerService");
@@ -468,7 +467,7 @@ describe("DIContext", () => {
 			expect(factoryServiceA.getDepKeys()).toContain("serviceA");
 			expect(factoryServiceA.getDepKeys()).toContain("innerService");
 			expect(factoryServiceA.getDeps().innerService.getDepKeys().length).toBe(
-				2 + rootResolversCount,
+				2 + rootResolversCount + 2, // +2 for mediators
 			);
 			expect(factoryServiceA.getDeps().innerService.getDepKeys()).toContain(
 				"p1",
@@ -811,84 +810,6 @@ describe("DIContext", () => {
 				"loggerService",
 			);
 			expect(appScope.resolve("loggerService").getDeps().level).toBe("debug");
-		});
-	});
-
-	describe("Handler Registration", () => {
-		class TestQueryHandler extends TestableBase implements Handler<any> {
-			key = "query-key";
-			async executor() {}
-		}
-		class TestCommandHandler extends TestableBase implements Handler<any> {
-			key = "command-key";
-			async executor() {}
-		}
-
-		it("should register handlers and call it's callbacks", () => {
-			const onQueryHandler = vi.fn();
-			const onCommandHandler = vi.fn();
-
-			registerModule(
-				{
-					queryHandlers: [TestQueryHandler],
-					commandHandlers: [TestCommandHandler],
-				},
-				{
-					onQueryHandler,
-					onCommandHandler,
-				},
-			);
-
-			const resolveQuery = onQueryHandler.mock.calls[0][0];
-			const commandResolver = onCommandHandler.mock.calls[0][0];
-			const queryHandler = resolveQuery();
-			const commandHandler = commandResolver();
-
-			expect(onQueryHandler).toHaveBeenCalledTimes(1);
-			expect(onQueryHandler).toHaveBeenCalledWith(expect.any(Function));
-			expect(onCommandHandler).toHaveBeenCalledTimes(1);
-			expect(onCommandHandler).toHaveBeenCalledWith(expect.any(Function));
-
-			expect(queryHandler.key).toBe("query-key");
-			expect(commandHandler.key).toBe("command-key");
-			expect(queryHandler).toBeInstanceOf(TestQueryHandler);
-			expect(commandHandler).toBeInstanceOf(TestCommandHandler);
-			expect(commandHandler.instanceId).toBe(commandResolver().instanceId);
-			expect(queryHandler.instanceId).toBe(resolveQuery().instanceId);
-		});
-
-		it("should register handlers with custom lifetime", () => {
-			const onQueryHandler = vi.fn();
-			const onCommandHandler = vi.fn();
-
-			registerModule(
-				{
-					commandHandlers: [
-						{
-							useClass: TestCommandHandler,
-							lifetime: Lifetime.SCOPED,
-						},
-					],
-					queryHandlers: [
-						{
-							useClass: TestQueryHandler,
-							lifetime: Lifetime.SCOPED,
-						},
-					],
-				},
-				{
-					onQueryHandler,
-					onCommandHandler,
-				},
-			);
-
-			const resolveQuery = onQueryHandler.mock.calls[0][0];
-			const resolveCommand = onCommandHandler.mock.calls[0][0];
-
-			expect(onQueryHandler).toHaveBeenCalledTimes(1);
-			expect(resolveQuery().instanceId).not.toBe(resolveQuery().instanceId);
-			expect(onCommandHandler).toHaveBeenCalledTimes(1);
-			expect(resolveCommand().instanceId).not.toBe(resolveCommand().instanceId);
 		});
 	});
 

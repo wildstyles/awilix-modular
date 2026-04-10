@@ -1,11 +1,11 @@
-export * from "./lib/cqrs/cqrs.js";
-export type * from "./lib/cqrs/cqrs.types.js";
-export * from "./lib/decorators/decorators.js";
+export * from "./lib/di/di-context.js";
+export * from "./lib/di/di-context.types.js";
+export * from "./lib/http/decorators.js";
+export * from "./lib/http/http-exception.js";
+export * from "./lib/http/openapi-builder.js";
 export {
 	hasValidationSchema,
 	RouteSchema,
-} from "./lib/decorators/state-util.js";
-export * from "./lib/di-context.js";
-export * from "./lib/di-context.types.js";
-export * from "./lib/http-exception.js";
-export * from "./lib/openapi-builder.js";
+} from "./lib/http/state-util.js";
+export * from "./lib/mediator/mediator.js";
+export type * from "./lib/mediator/mediator.types.js";

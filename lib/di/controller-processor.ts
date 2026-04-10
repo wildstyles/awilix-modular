@@ -4,14 +4,20 @@ import {
 	type BuildResolverOptions,
 	Lifetime,
 } from "awilix";
-import type { HttpVerb } from "./decorators/http-verbs.js";
+import {
+	type ExpressFramework,
+	type ExpressMethod,
+	type FastifyFramework,
+	HttpFramework,
+} from "../http/framework.types.js";
+import type { HttpVerb } from "../http/http-verbs.js";
 import {
 	type IRouteState,
 	type IState,
 	type MethodName,
 	type RouteSchema,
 	STATE,
-} from "./decorators/state-util.js";
+} from "../http/state-util.js";
 import * as ERRORS from "./di-context.errors.js";
 import type { DiContextOptions } from "./di-context.js";
 import type {
@@ -20,12 +26,6 @@ import type {
 	AnyModule as M,
 } from "./di-context.types.js";
 import { isClassController } from "./di-context.types.js";
-import {
-	type ExpressFramework,
-	type ExpressMethod,
-	type FastifyFramework,
-	HttpFramework,
-} from "./framework.types.js";
 
 type RouteRegistrationParams = {
 	verb: HttpVerb;

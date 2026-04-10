@@ -5,6 +5,11 @@ export type Contract<K extends string, P, R> = {
 	};
 };
 
+// ExecutionContext - immutable context from the execution source (HTTP, CLI, etc.)
+// Can be extended via module augmentation
+// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
+export interface ExecutionContext {}
+
 // Tag Registry - can be extended via module augmentation
 // Simple mapping of tag name to context type
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
@@ -14,7 +19,9 @@ export interface MiddlewareTagRegistry {}
 export type AreDependenciesSatisfied<
 	AccumulatedContext extends AnyContext,
 	RequiredTag extends keyof MiddlewareTagRegistry,
-> = AccumulatedContext extends MiddlewareTagRegistry[RequiredTag] ? true : false;
+> = AccumulatedContext extends MiddlewareTagRegistry[RequiredTag]
+	? true
+	: false;
 
 // Helper: compute context type from tags with optional exclusions
 export type ContextFromTags<
@@ -39,13 +46,19 @@ export type AnyContext = Record<string, unknown>;
 
 export type AnyContract = Contract<string, unknown, unknown>;
 
+// Handler constructor interface - enforces static members
+export interface HandlerConstructor<C extends AnyContract = AnyContract> {
+	readonly key: keyof C;
+	readonly contract: C;
+	new (...args: any[]): Handler<C>;
+}
+
 // Handler now with Context as second param (before K which has default)
 export interface Handler<
 	C extends AnyContract,
 	Ctx extends ContextFromTags = ContextFromTags,
 	K extends keyof C = keyof C,
 > {
-	readonly key: K;
 	readonly middlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
 	readonly excludeMiddlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
 	executor: Executor<ExtractPayload<C, K>, ExtractResponse<C, K>, Ctx>;
@@ -73,7 +86,12 @@ export type MiddlewareFn<
 > = (
 	payload: unknown,
 	context: RequiredContext & AnyContext,
-	next: Executor<unknown, unknown, RequiredContext & MiddlewareTagRegistry[Tag]>,
+	executionContext: ExecutionContext,
+	next: Executor<
+		unknown,
+		unknown,
+		RequiredContext & MiddlewareTagRegistry[Tag]
+	>,
 ) => Promise<unknown>;
 
 // Middleware configuration with optional second generic for requires
@@ -95,3 +113,11 @@ export type Middleware = MiddlewareConfig<
 
 export type AreAllTagsAdded<AddedTags extends keyof MiddlewareTagRegistry> =
 	Exclude<keyof MiddlewareTagRegistry, AddedTags> extends never ? true : false;
+
+// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
+export interface QueryRegistry {}
+// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
+export interface CommandRegistry {}
+
+// Helper to resolve registry - falls back to AnyContract if not augmented
+export type ResolveRegistry<R> = keyof R extends never ? AnyContract : R;

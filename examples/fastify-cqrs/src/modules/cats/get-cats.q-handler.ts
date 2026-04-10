@@ -5,17 +5,12 @@ import type {
 	GetCatsResult as Response,
 } from "./get-cats.dto.js";
 
-export const QUERY_KEY = "cats/get-cats";
+export class GetCatsQueryHandler
+	implements Handler<typeof GetCatsQueryHandler.contract>
+{
+	static readonly key = "cats/get-cats";
+	static contract: Contract<typeof GetCatsQueryHandler.key, Payload, Response>;
 
-type GetCatsQueryContract = typeof GetCatsQueryHandler.contract;
-
-export class GetCatsQueryHandler implements Handler<GetCatsQueryContract> {
-	// TODO: all static?
-	//  	static readonly key = "cats/get-cats";
-	// static contract: Contract<typeof GetCatsQueryHandler.key, Payload, Response>;
-
-	readonly key = QUERY_KEY;
-	static contract: Contract<typeof QUERY_KEY, Payload, Response>;
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
 	// Single source of truth - all types are inferred from this

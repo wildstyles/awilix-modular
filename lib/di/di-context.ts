@@ -11,13 +11,13 @@ import {
 	Lifetime,
 	type Resolver,
 } from "awilix";
+import type { RouteRegistration } from "../http/openapi-builder.js";
+import type { CompleteMediatorBuilder } from "../mediator/mediator.js";
 import { ControllerProcessor } from "./controller-processor.js";
-import type { AnyContract, Handler } from "./cqrs/cqrs.types.js";
 import * as ERRORS from "./di-context.errors.js";
 import {
 	type AnyProvider,
 	type ClassHandler,
-	isClassHandler,
 	isClassProvider,
 	isCostructorProvider,
 	isFactoryProvider,
@@ -26,13 +26,13 @@ import {
 	isPrimitive,
 	type AnyModule as M,
 } from "./di-context.types.js";
-import type { RouteRegistration } from "./openapi-builder.js";
+import { HandlerProcessor } from "./handler-processor.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 
 export interface DiContextOptions {
 	framework: unknown;
-	onQueryHandler?: (resolveHandler: () => Handler<AnyContract>) => void;
-	onCommandHandler?: (resolveHandler: () => Handler<AnyContract>) => void;
+	queryMediatorBuilder?: CompleteMediatorBuilder;
+	commandMediatorBuilder?: CompleteMediatorBuilder;
 	beforeRouteRegistered?: (params: RouteRegistration) => any[];
 	containerOptions?: ContainerOptions;
 	rootProviders?: Record<string, AnyProvider>;
@@ -52,6 +52,7 @@ export class DIContext {
 	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
 	private readonly sorter = new ProviderDependencySorter();
 	private readonly controllerProcessor: ControllerProcessor;
+	private readonly handlerProcessor: HandlerProcessor;
 	private readonly options: DiContextOptions;
 	private readonly rootContainer: AwilixContainer;
 
@@ -69,10 +70,18 @@ export class DIContext {
 			},
 		};
 
+		// registration per module??
+		// augment type for initial type passed to execute from framework
+
 		this.controllerProcessor = new ControllerProcessor(
 			this.options.framework,
 			this.options.providerOptions || {},
 			this.options.beforeRouteRegistered,
+		);
+		this.handlerProcessor = new HandlerProcessor(
+			this.options.providerOptions || {},
+			this.options.queryMediatorBuilder,
+			this.options.commandMediatorBuilder,
 		);
 
 		this.rootContainer = createContainer(this.options.containerOptions);
@@ -198,8 +207,8 @@ export class DIContext {
 			},
 		);
 
-		this.processHandlers(m, scope, "query");
-		this.processHandlers(m, scope, "command");
+		this.handlerProcessor.processHandlers(m, scope, "query");
+		this.handlerProcessor.processHandlers(m, scope, "command");
 		this.controllerProcessor.processControllers(m, scope);
 
 		return {
@@ -279,21 +288,11 @@ export class DIContext {
 	private extractResolverOptions(
 		module: M,
 		provider: AnyProvider | ClassHandler,
-		context: "provider" | "handler" = "provider",
 	): BuildResolverOptions<any> {
 		const baseOptions = {
 			...this.options.providerOptions,
 			...module.providerOptions,
 		};
-
-		if (context === "handler" && isClassHandler(provider)) {
-			const { useClass, ...providerOptions } = provider;
-
-			return {
-				...baseOptions,
-				...providerOptions,
-			};
-		}
 
 		if (isClassProvider(provider)) {
 			const { useClass, allowCircular, ...providerOptions } = provider;
@@ -351,48 +350,6 @@ export class DIContext {
 
 	private markModuleIfImportsUseForwardRef(m: M): void {
 		if ((m.imports || []).some(isForwardRef)) this.forwardRefModules.add(m);
-	}
-
-	private processHandlers(
-		m: M,
-		scope: AwilixContainer,
-		handlerType: "query" | "command",
-	) {
-		const config = {
-			query: {
-				prefix: "q",
-				handlers: m.queryHandlers,
-				onHandler: this.options.onQueryHandler,
-			},
-			command: {
-				prefix: "c",
-				handlers: m.commandHandlers,
-				onHandler: this.options.onCommandHandler,
-			},
-		};
-
-		const { prefix, handlers, onHandler } = config[handlerType];
-
-		if (!onHandler || !handlers?.length) return;
-
-		for (const h of handlers) {
-			const handler = isClassHandler(h) ? h : { useClass: h };
-			const options = this.extractResolverOptions(m, handler, "handler");
-			const handlerSymbol = Symbol(
-				`${prefix}-handler_${handler.useClass.name}`,
-			);
-
-			scope.register({
-				[handlerSymbol]: asClass(handler.useClass, options),
-			});
-
-			onHandler(() => {
-				const requestScope =
-					options.lifetime === Lifetime.SINGLETON ? scope : scope.createScope();
-
-				return requestScope.resolve(handlerSymbol);
-			});
-		}
 	}
 
 	private ensureCircularDependencyHasForwardRef(m: M, moduleChain: M[]): void {

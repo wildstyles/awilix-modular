@@ -3,6 +3,7 @@ import Fastify from "fastify";
 
 import type { FastifyInstance } from "./types.js";
 import { setupErrorHandler } from "./error-handler.js";
+import { extractReqContextMiddleware } from "./request-context.middleware.js";
 
 export function buildApp() {
 	const app: FastifyInstance = Fastify({
@@ -13,6 +14,8 @@ export function buildApp() {
 	app.setSerializerCompiler(() => {
 		return (data) => JSON.stringify(data);
 	});
+
+	app.addHook("onRequest", extractReqContextMiddleware);
 
 	setupErrorHandler(app);
 

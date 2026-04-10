@@ -1,10 +1,13 @@
 import type { FastifyInstance } from "@/types.js";
 import type { Controller } from "@/modules/index.js";
+import { Deps } from "./cats.module.js";
 
 import { GetCatsSchema } from "./get-cats.dto.js";
 
 export class CatsController implements Controller {
 	private readonly instanceId = Math.random().toString(36).substring(7);
+
+	constructor(private readonly queryMediator: Deps["queryMediator"]) {}
 
 	registerRoutes(fastify: FastifyInstance) {
 		fastify.route({
@@ -13,13 +16,13 @@ export class CatsController implements Controller {
 			schema: GetCatsSchema,
 			// fully type safe thanks to TypeBoxTypeProvider
 			handler: async (req, res) => {
-				const query = req.query;
-
-				const result = await fastify.queryMediator.execute(
+				const result = await this.queryMediator.execute(
 					"cats/get-cats",
 					{
-						...query,
+						...req.params,
+						...req.query,
 					},
+					req.context, // Extracted by framework-level middleware
 				);
 
 				return res

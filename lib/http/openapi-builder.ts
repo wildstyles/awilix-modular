@@ -1,4 +1,4 @@
-import type { RouteSchema } from "./decorators/state-util.js";
+import type { RouteSchema } from "../http/state-util.js";
 
 export interface RouteRegistration {
 	method: string;

@@ -7,45 +7,30 @@ import {
 	type QueryContracts,
 } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
+import { RequestContext } from "./request-context.middleware.js";
 import {
 	authMiddleware,
 	loggingMiddleware,
 	tenantMiddleware,
 } from "./middlewares.js";
 
-const queryMediatorInstance = Mediator.initializeBuilder()
-	.addMiddleware(loggingMiddleware)
-	.addMiddleware(authMiddleware)
-	.addMiddleware(tenantMiddleware)
-	.build<QueryContracts>();
-
-// Create command mediator
-const commandMediatorInstance = Mediator.initialize<CommandContracts>();
-
 async function bootstrap() {
 	const fastify = buildApp();
 
 	await setupSwagger(fastify);
 
-	fastify.decorate("queryMediator", queryMediatorInstance);
-	fastify.decorate("commandMediator", commandMediatorInstance);
-
 	DIContext.create(AppModule, {
 		framework: fastify,
-		onQueryHandler: (resolveHandler) => {
-			const handler = resolveHandler();
-
-			queryMediatorInstance.register(
-				handler.key,
-				(payload, context) => {
-					return resolveHandler().executor(payload, context);
-				},
-				{
-					middlewareTags: handler.middlewareTags,
-					excludeMiddlewareTags: handler.excludeMiddlewareTags,
-				},
-			);
-		},
+		queryMediatorBuilder: Mediator.initializeBuilder()
+			.addMiddleware(loggingMiddleware)
+			.addMiddleware(authMiddleware)
+			.addMiddleware(tenantMiddleware)
+			.build(),
+		commandMediatorBuilder: Mediator.initializeBuilder()
+			.addMiddleware(loggingMiddleware)
+			.addMiddleware(authMiddleware)
+			.addMiddleware(tenantMiddleware)
+			.build(),
 	});
 
 	try {
@@ -59,14 +44,12 @@ async function bootstrap() {
 
 bootstrap();
 
-declare module "fastify" {
-	interface FastifyInstance {
-		queryMediator: typeof queryMediatorInstance;
-		commandMediator: typeof commandMediatorInstance;
-	}
-}
-
 declare module "awilix-modular" {
+	interface QueryRegistry extends QueryContracts {}
+	interface CommandRegistry extends CommandContracts {}
+
+	interface ExecutionContext extends RequestContext {}
+
 	interface MiddlewareTagRegistry {
 		auth: { userId: string; roles: string[] };
 

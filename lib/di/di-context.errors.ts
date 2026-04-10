@@ -1,3 +1,5 @@
+import type { HandlerType } from "./handler-processor.js";
+
 export class DuplicateControllersInModuleError extends Error {
 	constructor(moduleName: string) {
 		super(
@@ -76,5 +78,33 @@ export class UnsupportedFrameworkError extends Error {
 			"Unsupported framework detected. Only Fastify and Express are currently supported for decorator-based routing.",
 		);
 		this.name = "UnsupportedFrameworkError";
+	}
+}
+
+export class HandlerMissingStaticKeyError extends Error {
+	constructor(handlerName: string) {
+		super(
+			`Handler class "${handlerName}" must have a static "key" property of type string. ` +
+				`Example: static readonly key = "my-handler" as const;`,
+		);
+		this.name = "HandlerMissingStaticKeyError";
+	}
+}
+
+export class HandlerMissingStaticContractError extends Error {
+	constructor(handlerName: string) {
+		super(
+			`Handler class "${handlerName}" must have a static "contract" property. ` +
+				`Example: static contract: Contract<typeof MyHandler.key, PayloadType, ResponseType>;`,
+		);
+		this.name = "HandlerMissingStaticContractError";
+	}
+}
+
+export class MediatorIsNotProvided extends Error {
+	constructor(handlerType: HandlerType) {
+		super(
+			`${handlerType}Mediator is not instanciated. Please provide ${handlerType}Mediator param to DiContext`,
+		);
 	}
 }

@@ -1,17 +1,18 @@
-import * as errors from "./cqrs.errors.js";
+import * as errors from "./mediator.errors.js";
 import type {
-	AnyContract,
 	AnyContext,
+	AnyContract,
 	AreAllTagsAdded,
 	AreDependenciesSatisfied,
 	EmptyContext,
+	ExecutionContext,
 	Executor,
 	ExtractPayload,
 	ExtractResponse,
 	Middleware,
 	MiddlewareConfig,
 	MiddlewareTagRegistry,
-} from "./cqrs.types.js";
+} from "./mediator.types.js";
 
 type HandlerMiddlewareOptions = {
 	middlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
@@ -22,7 +23,13 @@ interface HandlerRegistration extends HandlerMiddlewareOptions {
 	executor: Executor;
 }
 
-class MediatorBuilder<
+export interface CompleteMediatorBuilder {
+	__buildForModule(moduleName: string): Mediator<AnyContract>;
+}
+
+const mediatorConstructorToken = Symbol("MediatorConstructorToken");
+
+export class MediatorBuilder<
 	AccumulatedContext extends AnyContext = EmptyContext,
 	AddedTags extends keyof MiddlewareTagRegistry = never,
 > {
@@ -37,7 +44,10 @@ class MediatorBuilder<
 			: AreDependenciesSatisfied<AccumulatedContext, Requires> extends true
 				? MiddlewareConfig<Tag, Requires>
 				: never,
-	): MediatorBuilder<AccumulatedContext & MiddlewareTagRegistry[Tag], AddedTags | Tag> {
+	): MediatorBuilder<
+		AccumulatedContext & MiddlewareTagRegistry[Tag],
+		AddedTags | Tag
+	> {
 		const { tag, requires } = middleware;
 
 		const isDuplicate = this.middlewares.some((mw) => mw.tag === tag);
@@ -58,28 +68,36 @@ class MediatorBuilder<
 	}
 
 	build: AreAllTagsAdded<AddedTags> extends true
-		? <C extends AnyContract>() => Mediator<C>
+		? () => CompleteMediatorBuilder
 		: never = () => {
-		return new Mediator(this.middlewares, mediatorConstructorToken);
+		return {
+			__buildForModule: (moduleName) => {
+				return new Mediator(
+					this.middlewares,
+					moduleName,
+					mediatorConstructorToken,
+				);
+			},
+		};
 	};
 }
-
-const mediatorConstructorToken = Symbol("MediatorConstructorToken");
 
 export class Mediator<C extends AnyContract> {
 	private handlers = new Map<string, HandlerRegistration>();
 	private middlewares: Middleware[];
+	private moduleName: string;
 
-	constructor(middlewares: Middleware[], token: typeof mediatorConstructorToken) {
+	constructor(
+		middlewares: Middleware[],
+		moduleName: string,
+		token: typeof mediatorConstructorToken,
+	) {
 		if (token !== mediatorConstructorToken) {
 			throw new errors.CannotConstructMediatorDirectly();
 		}
 
+		this.moduleName = moduleName;
 		this.middlewares = middlewares;
-	}
-
-	static initialize<C extends AnyContract>() {
-		return new Mediator<C>([], mediatorConstructorToken);
 	}
 
 	static initializeBuilder() {
@@ -108,23 +126,28 @@ export class Mediator<C extends AnyContract> {
 	execute<K extends keyof C>(
 		key: K,
 		payload: ExtractPayload<C, K>,
+		...args: keyof ExecutionContext extends never
+			? [executionContext?: AnyContext]
+			: [executionContext: ExecutionContext]
 	): Promise<ExtractResponse<C, K>> {
+		const executionContext = args[0] ?? {};
 		const keyStr = String(key);
 		const handlerReg = this.handlers.get(keyStr);
 
 		if (!handlerReg) {
-			throw new errors.HandlerNotRegisteredError(keyStr);
+			throw new errors.HandlerNotRegisteredError(keyStr, this.moduleName);
 		}
 
 		const applicableMiddlewares = this.middlewares.filter((mw) =>
 			this.shouldApplyMiddleware(mw, handlerReg),
 		);
 
+		// Middlewares receive executionContext, but handlers (final executor) do not
 		const wrappedExecutor = applicableMiddlewares.reduceRight<
 			Executor<unknown, unknown, AnyContext>
 		>(
 			(nextExecutor, middleware) => (payload, context) =>
-				middleware.execute(payload, context, nextExecutor),
+				middleware.execute(payload, context, executionContext, nextExecutor),
 			handlerReg.executor,
 		);
 

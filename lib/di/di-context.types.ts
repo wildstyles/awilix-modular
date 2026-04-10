@@ -1,5 +1,11 @@
 import type { BuildResolverOptions, Constructor } from "awilix";
-import type { Handler } from "./cqrs/cqrs.types.ts";
+import type { Mediator } from "../mediator/mediator.js";
+import type {
+	CommandRegistry,
+	HandlerConstructor,
+	QueryRegistry,
+	ResolveRegistry,
+} from "../mediator/mediator.types.ts";
 
 // ============================================================================
 // Base Type Definitions
@@ -133,8 +139,10 @@ type ResolveDeps<
 > = ResolveProviders<D> &
 	(D["imports"] extends readonly ModuleImport[]
 		? ExtractExportsFromImports<D["imports"]>
-		: DefProviderMap) &
-	CommonDependencies;
+		: DefProviderMap) & {
+		queryMediator: Mediator<ResolveRegistry<QueryRegistry>>;
+		commandMediator: Mediator<ResolveRegistry<CommandRegistry>>;
+	} & CommonDependencies;
 
 type ResolveForRootConfig<D extends Partial<WithForRootConfig>> =
 	D["forRootConfig"] extends WithForRootConfig["forRootConfig"]
@@ -197,8 +205,6 @@ type ExtractDeps<Def> = Def extends {
 }
 	? D
 	: Record<string, unknown>;
-
-export type HandlerConstructor = Constructor<Handler<any, string>>;
 
 export type ClassHandler = {
 	useClass: HandlerConstructor;

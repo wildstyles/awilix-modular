@@ -1,6 +1,8 @@
 export class CannotConstructMediatorDirectly extends Error {
 	constructor() {
-		super("Cannot construct Mediator directly. Use Mediator.initialize() instead.");
+		super(
+			"Cannot construct Mediator directly. Use Mediator.initialize() instead.",
+		);
 	}
 }
 
@@ -42,8 +44,10 @@ export class MiddlewareRequiresDependencyError extends Error {
 }
 
 export class HandlerNotRegisteredError extends Error {
-	constructor(handlerKey: string) {
-		super(`Handler key of ${handlerKey} is not registered`);
+	constructor(handlerKey: string, moduleName: string) {
+		super(
+			`Handler key of ${handlerKey} is not registered in module: "${moduleName}"`,
+		);
 		this.name = "HandlerNotRegisteredError";
 	}
 }
