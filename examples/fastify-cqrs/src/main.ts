@@ -1,4 +1,4 @@
-import { DIContext, initializeBus } from "awilix-modular";
+import { DIContext, Bus } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import {
@@ -13,21 +13,14 @@ import {
 	tenantMiddleware,
 } from "./middlewares.js";
 
-// Create query bus with type-safe middleware chaining
-const queryBusInstance = initializeBus<QueryContracts>()
+const queryBusInstance = Bus.initializeBuilder()
 	.addMiddleware(loggingMiddleware)
-	// .addMiddleware(tenantMiddleware)
 	.addMiddleware(authMiddleware)
 	.addMiddleware(tenantMiddleware)
-	// .addMiddleware(tenantMiddleware)
-	.build();
+	.build<QueryContracts>();
 
-// Missing loggingMiddleware - error will appear in module declaration below
-const commandBusInstance = initializeBus<CommandContracts>()
-	.addMiddleware(authMiddleware)
-	.addMiddleware(tenantMiddleware)
-	.addMiddleware(loggingMiddleware) // Uncomment to fix!
-	.build();
+// Create command bus
+const commandBusInstance = Bus.initialize<CommandContracts>();
 
 async function bootstrap() {
 	const fastify = buildApp();

@@ -1,3 +1,9 @@
+export class CannotConstructBusDirectly extends Error {
+	constructor() {
+		super("Cannot construct Bus directly. Use Bus.initialize() instead.");
+	}
+}
+
 export class HandlerAlreadyRegisteredError extends Error {
 	constructor(handlerKey: string) {
 		super(`Handler "${handlerKey}" already registered!`);

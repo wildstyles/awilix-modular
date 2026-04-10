@@ -92,3 +92,6 @@ export type Middleware = MiddlewareConfig<
 	keyof MiddlewareTagRegistry,
 	keyof MiddlewareTagRegistry
 >;
+
+export type AreAllTagsAdded<AddedTags extends keyof MiddlewareTagRegistry> =
+	Exclude<keyof MiddlewareTagRegistry, AddedTags> extends never ? true : false;
