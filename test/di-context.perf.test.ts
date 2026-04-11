@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DIContext } from "../lib/di-context.js";
-import { createStaticModule } from "../lib/di-context.types.js";
+import { DIContext } from "../lib/di/di-context.js";
+import { createStaticModule } from "../lib/di/di-context.types.js";
 
 describe("DIContext Performance", () => {
 	const measure = (name: string, fn: () => void) => {

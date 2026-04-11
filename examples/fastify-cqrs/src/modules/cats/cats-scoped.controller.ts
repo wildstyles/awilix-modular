@@ -1,5 +1,4 @@
-import type { FastifyInstance } from "@/types.js";
-import type { Controller } from "@/modules/index.js";
+import type { Controller } from "awilix-modular";
 
 import type { Deps } from "./cats.module.js";
 import { GetCatsSchema } from "./get-cats.dto.js";
@@ -10,10 +9,11 @@ export class CatsScopedController implements Controller {
 	constructor(
 		private getCatsService: Deps["getCatsService"],
 		private readonly resolveSelf: () => CatsScopedController,
+		private readonly app: Deps["app"],
 	) {}
 
-	registerRoutes(fastify: FastifyInstance) {
-		fastify.route({
+	registerRoutes() {
+		this.app.route({
 			method: "GET",
 			url: "/cats-scoped",
 			schema: GetCatsSchema,

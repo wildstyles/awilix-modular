@@ -1,14 +1,14 @@
 import { AwilixResolutionError, Lifetime } from "awilix";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { controller, GET, POST, schema } from "../lib/decorators/decorators.js";
-import * as ERRORS from "../lib/di-context.errors.js";
-import { DIContext, type DiContextOptions } from "../lib/di-context.js";
+import { controller, GET, POST, schema } from "../lib/http/decorators.js";
+import * as ERRORS from "../lib/di/di-context.errors.js";
+import { DIContext, type DiContextOptions } from "../lib/di/di-context.js";
 import {
 	type AnyModule,
 	type Controller,
 	createDynamicModule,
-} from "../lib/di-context.types.js";
-import type { ExpressFramework } from "../lib/framework.types.js";
+} from "../lib/di/di-context.types.js";
+import type { ExpressFramework } from "../lib/http/framework.types.js";
 
 describe("ControllerProcessor", () => {
 	const createMockExpress = () => {
@@ -42,13 +42,16 @@ describe("ControllerProcessor", () => {
 		options?: Partial<DiContextOptions>,
 	) => {
 		return DIContext.create(module, {
+			rootProviders: {
+				app: options?.framework || mockExpress,
+			},
 			framework: options?.framework || mockExpress,
 			...options,
 		});
 	};
 
-	class ControllerBase implements Controller<ExpressFramework> {
-		registerRoutes(_framework: ExpressFramework) {}
+	class ControllerBase implements Controller {
+		registerRoutes() {}
 	}
 
 	class TestController extends ControllerBase {}
@@ -62,10 +65,12 @@ describe("ControllerProcessor", () => {
 
 	describe("Basic Controller Registration", () => {
 		it("should register controllers with Express framework", () => {
-			class ApiController extends ControllerBase {
-				registerRoutes(framework: ExpressFramework) {
-					framework.get("/api/users", () => {});
-					framework.post("/api/users", () => {});
+			class ApiController implements Controller {
+				constructor(private readonly app: any) {}
+
+				registerRoutes() {
+					this.app.get("/api/users", () => {});
+					this.app.post("/api/users", () => {});
 				}
 			}
 

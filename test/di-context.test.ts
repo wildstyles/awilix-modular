@@ -4,12 +4,12 @@ import {
 	Lifetime,
 } from "awilix";
 import { describe, expect, it, vi } from "vitest";
-import * as ERRORS from "../lib/di-context.errors.js";
+import * as ERRORS from "../lib/di/di-context.errors.js";
 import {
 	DIContext,
 	type DiContextOptions,
 	type ModuleScopeTree,
-} from "../lib/di-context.js";
+} from "../lib/di/di-context.js";
 import {
 	type AnyModule,
 	createFactoryProvider,
@@ -18,7 +18,7 @@ import {
 	forwardRef,
 	type ModuleDef,
 	type ModuleRef,
-} from "../lib/di-context.types.js";
+} from "../lib/di/di-context.types.js";
 
 // Test-only type: Override resolve to return 'any' for convenience
 type TestContainer = Omit<AwilixContainer, "resolve"> & {
@@ -185,10 +185,9 @@ describe("DIContext", () => {
 
 			expect(singletonFromModuleA).toBe(singletonFromModuleB);
 
-			// Module providers can access all root providers + queryMediator + commandMediator
 			const serviceA = moduleA?.scope.resolve("serviceA");
 			expect(serviceA.getDepKeys().length).toBe(
-				Object.keys(rootProviders).length + 3, // +1 for serviceA itself, +2 for mediators
+				Object.keys(rootProviders).length + 1,
 			);
 		});
 	});
@@ -457,7 +456,7 @@ describe("DIContext", () => {
 			const factoryServiceA = scope.resolve("factoryServiceA");
 			const factoryServiceB = scope.resolve("factoryServiceB");
 
-			expect(serviceA.getDepKeys().length).toBe(4 + rootResolversCount + 2); // +2 for mediators
+			expect(serviceA.getDepKeys().length).toBe(4 + rootResolversCount);
 			expect(serviceA.getDepKeys()).toContain("factoryServiceA");
 			expect(serviceA.getDepKeys()).toContain("factoryServiceB");
 			expect(serviceA.getDepKeys()).toContain("innerService");
@@ -467,7 +466,7 @@ describe("DIContext", () => {
 			expect(factoryServiceA.getDepKeys()).toContain("serviceA");
 			expect(factoryServiceA.getDepKeys()).toContain("innerService");
 			expect(factoryServiceA.getDeps().innerService.getDepKeys().length).toBe(
-				2 + rootResolversCount + 2, // +2 for mediators
+				2 + rootResolversCount,
 			);
 			expect(factoryServiceA.getDeps().innerService.getDepKeys()).toContain(
 				"p1",

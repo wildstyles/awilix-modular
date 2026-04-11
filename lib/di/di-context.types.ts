@@ -210,12 +210,10 @@ export type ClassHandler = {
 	useClass: HandlerConstructor;
 } & BuildResolverOptions<any>;
 
-export type ControllerConstructor<TFramework = unknown> = Constructor<
-	Controller<TFramework>
->;
+export type ControllerConstructor = Constructor<Controller>;
 
-export interface Controller<TFramework = unknown> {
-	registerRoutes: (framework: TFramework) => void;
+export interface Controller {
+	registerRoutes: () => void;
 }
 
 type WithProviders<Def extends StaticModuleDef> =
@@ -269,18 +267,14 @@ export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
 	queryHandlers?: (ClassHandler | HandlerConstructor)[];
 	commandHandlers?: (ClassHandler | HandlerConstructor)[];
-	controllers?: (
-		| ClassController
-		| ControllerConstructor<any>
-		| Constructor<any>
-	)[];
+	controllers?: (ClassController | ControllerConstructor | Constructor<any>)[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &
 	WithExports<Def> &
 	WithImports<Def>;
 
 type ClassController = {
-	useClass: ControllerConstructor<any> | Constructor<any>;
+	useClass: ControllerConstructor | Constructor<any>;
 } & BuildResolverOptions<any>;
 
 export type DynamicModuleOptions = {

@@ -9,6 +9,7 @@ import { DogsService } from "./dogs.service.js";
 import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
 import { GetCatsService } from "./get-cats.service.js";
 
+// TODO: instead of global augmentatition pass contracts to moduledef
 export type CatsModuleQueryContracts = typeof GetCatsQueryHandler.contract;
 
 export type CatsModuleDef = ModuleDef<{

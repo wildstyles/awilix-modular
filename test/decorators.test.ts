@@ -10,13 +10,13 @@ import {
 	POST,
 	PUT,
 	schema,
-} from "../lib/decorators/decorators.js";
-import { HttpVerbs } from "../lib/decorators/http-verbs.js";
+} from "../lib/http/decorators.js";
+import { HttpVerbs } from "../lib/http/http-verbs.js";
 import {
 	hasValidationSchema,
 	type IState,
 	STATE,
-} from "../lib/decorators/state-util.js";
+} from "../lib/http/state-util.js";
 
 /**
  * Helper function to get decorator state from a class

@@ -1,9 +1,4 @@
-import {
-	type Controller as BaseController,
-	createStaticModule,
-	type ModuleDef,
-} from "awilix-modular";
-import type { FastifyInstance } from "@/types.js";
+import { createStaticModule, type ModuleDef } from "awilix-modular";
 import {
 	CatsModule,
 	type CatsModuleQueryContracts,
@@ -15,10 +10,6 @@ export type QueryContracts = CatsModuleQueryContracts &
 	OwnersModuleQueryContracts;
 
 export type CommandContracts = Record<string, never>;
-
-// ensures "registerRoutes" exist on controller with proper framework instance
-// type for framework route registration
-export interface Controller extends BaseController<FastifyInstance> {}
 
 export type AppModuleDef = ModuleDef<{
 	imports: [typeof CatsModule];

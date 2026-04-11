@@ -1,11 +1,11 @@
 import { type AwilixContainer, AwilixResolutionError, Lifetime } from "awilix";
 import { describe, expect, it } from "vitest";
-import * as ERRORS from "../lib/di-context.errors.js";
+import * as ERRORS from "../lib/di/di-context.errors.js";
 import {
 	DIContext,
 	type DiContextOptions,
 	type ModuleScopeTree,
-} from "../lib/di-context.js";
+} from "../lib/di/di-context.js";
 import {
 	type AnyModule,
 	createStaticModule,
@@ -13,7 +13,7 @@ import {
 	forwardRef,
 	type ModuleDef,
 	type ModuleRef,
-} from "../lib/di-context.types.js";
+} from "../lib/di/di-context.types.js";
 
 // Test-only type: Override resolve to return 'any' for convenience
 type TestContainer = Omit<AwilixContainer, "resolve"> & {

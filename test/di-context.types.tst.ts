@@ -5,12 +5,12 @@ import type {
 	DynamicModule as DM,
 	EmptyObject,
 	StaticModule as M,
-} from "../lib/di-context.types.js";
+} from "../lib/di/di-context.types.js";
 import {
 	createDynamicModule,
 	createFactoryProvider,
 	createStaticModule,
-} from "../lib/di-context.types.js";
+} from "../lib/di/di-context.types.js";
 
 describe("Module", () => {
 	class P1 {

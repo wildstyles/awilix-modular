@@ -37,7 +37,7 @@ type RouteRegistrationParams = {
 
 export class ControllerProcessor {
 	private readonly registeredControllers = new WeakMap<
-		ControllerConstructor<unknown>,
+		ControllerConstructor,
 		M
 	>();
 	private readonly frameworkType: HttpFramework;
@@ -108,7 +108,7 @@ export class ControllerProcessor {
 				);
 
 				if (controllerInstance.registerRoutes) {
-					controllerInstance.registerRoutes(this.framework);
+					controllerInstance.registerRoutes();
 				}
 
 				this.processDecoratedController(useClass, () =>
@@ -135,7 +135,7 @@ export class ControllerProcessor {
 		symbol: symbol,
 		scope: AwilixContainer,
 		withNewScope: boolean,
-	): Controller<unknown> {
+	): Controller {
 		if (withNewScope) return scope.createScope().resolve(symbol);
 
 		return scope.resolve(symbol);
@@ -143,7 +143,7 @@ export class ControllerProcessor {
 
 	private processDecoratedController(
 		target: ControllerConstructor,
-		resolve: () => Controller<unknown>,
+		resolve: () => Controller,
 	) {
 		const state = this.getDecoratedState(target);
 

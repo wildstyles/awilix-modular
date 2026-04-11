@@ -1,6 +1,7 @@
 import { DIContext, Mediator } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
+import { FastifyInstance } from "@/types.js";
 import {
 	AppModule,
 	type CommandContracts,
@@ -21,6 +22,9 @@ async function bootstrap() {
 
 	DIContext.create(AppModule, {
 		framework: fastify,
+		rootProviders: {
+			app: fastify,
+		},
 		queryMediatorBuilder: Mediator.initializeBuilder()
 			.addMiddleware(loggingMiddleware)
 			.addMiddleware(authMiddleware)
@@ -50,6 +54,11 @@ declare module "awilix-modular" {
 
 	interface ExecutionContext extends RequestContext {}
 
+	interface CommonDependencies {
+		app: FastifyInstance;
+	}
+
+	// TODO: separate query from command
 	interface MiddlewareTagRegistry {
 		auth: { userId: string; roles: string[] };
 
