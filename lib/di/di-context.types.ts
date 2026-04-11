@@ -1,11 +1,6 @@
 import type { BuildResolverOptions, Constructor } from "awilix";
 import type { Mediator } from "../mediator/mediator.js";
-import type {
-	CommandRegistry,
-	HandlerConstructor,
-	QueryRegistry,
-	ResolveRegistry,
-} from "../mediator/mediator.types.ts";
+import type { HandlerConstructor } from "../mediator/mediator.types.ts";
 
 // ============================================================================
 // Base Type Definitions
@@ -42,6 +37,46 @@ type ToModuleProviderMap<
 		};
 
 type DefProviderMap = Record<string, object | string | boolean | number>;
+
+// ============================================================================
+// Contract Extraction from Handlers
+// ============================================================================
+
+/**
+ * Extract contract type from a single handler (either HandlerConstructor or ClassHandler)
+ */
+type ExtractContractFromHandler<H> =
+	H extends HandlerConstructor<infer C>
+		? C
+		: H extends ClassHandler
+			? H["useClass"] extends HandlerConstructor<infer C>
+				? C
+				: never
+			: never;
+
+/**
+ * Extract and merge all contracts from an array of handlers
+ */
+type ExtractContractsFromHandlers<Handlers extends readonly any[]> =
+	Handlers extends readonly [infer First, ...infer Rest]
+		? ExtractContractFromHandler<First> & ExtractContractsFromHandlers<Rest>
+		: EmptyObject;
+
+/**
+ * Resolve query contracts from module definition
+ */
+type ResolveQueryContracts<D extends { queryHandlers?: readonly any[] }> =
+	D["queryHandlers"] extends readonly any[]
+		? ExtractContractsFromHandlers<D["queryHandlers"]>
+		: EmptyObject;
+
+/**
+ * Resolve command contracts from module definition
+ */
+type ResolveCommandContracts<D extends { commandHandlers?: readonly any[] }> =
+	D["commandHandlers"] extends readonly any[]
+		? ExtractContractsFromHandlers<D["commandHandlers"]>
+		: EmptyObject;
 
 // Helper type to map dependency keys to their actual types
 type MapKeysToValues<
@@ -114,6 +149,12 @@ type ModuleImport = AnyModule | AnyModuleRef;
 type ResolveImports<D extends { imports?: readonly ModuleImport[] }> =
 	D["imports"] extends readonly ModuleImport[] ? D["imports"] : [];
 
+type ResolveQueryHandlers<D extends { queryHandlers?: readonly any[] }> =
+	D["queryHandlers"] extends readonly any[] ? D["queryHandlers"] : [];
+
+type ResolveCommandHandlers<D extends { commandHandlers?: readonly any[] }> =
+	D["commandHandlers"] extends readonly any[] ? D["commandHandlers"] : [];
+
 type ExtractModuleDefFromModule<T> =
 	T extends StaticModule<infer TDef extends StaticModuleDef>
 		? TDef
@@ -131,18 +172,30 @@ type ExtractExportsFromImports<T extends readonly ModuleImport[]> =
 			: ExtractExportsFromImports<Rest>
 		: EmptyObject;
 
+type ResolveQueryMediator<D extends { queryHandlers?: readonly any[] }> =
+	D["queryHandlers"] extends readonly [any, ...any[]]
+		? { queryMediator: Mediator<ResolveQueryContracts<D>> }
+		: EmptyObject;
+
+type ResolveCommandMediator<D extends { commandHandlers?: readonly any[] }> =
+	D["commandHandlers"] extends readonly [any, ...any[]]
+		? { commandMediator: Mediator<ResolveCommandContracts<D>> }
+		: EmptyObject;
+
 type ResolveDeps<
 	D extends {
 		providers?: DefProviderMap;
 		imports?: readonly ModuleImport[];
+		queryHandlers?: readonly any[];
+		commandHandlers?: readonly any[];
 	},
 > = ResolveProviders<D> &
 	(D["imports"] extends readonly ModuleImport[]
 		? ExtractExportsFromImports<D["imports"]>
-		: DefProviderMap) & {
-		queryMediator: Mediator<ResolveRegistry<QueryRegistry>>;
-		commandMediator: Mediator<ResolveRegistry<CommandRegistry>>;
-	} & CommonDependencies;
+		: DefProviderMap) &
+	ResolveQueryMediator<D> &
+	ResolveCommandMediator<D> &
+	CommonDependencies;
 
 type ResolveForRootConfig<D extends Partial<WithForRootConfig>> =
 	D["forRootConfig"] extends WithForRootConfig["forRootConfig"]
@@ -157,12 +210,16 @@ export type ModuleDef<
 			: never;
 		imports?: readonly ModuleImport[];
 		forRootConfig?: UnknownRecord;
+		queryHandlers?: readonly any[];
+		commandHandlers?: readonly any[];
 	},
 > = {
 	providers: ResolveProviders<D>;
 	exports: ResolveExports<D>;
 	imports: ResolveImports<D>;
 	deps: ResolveDeps<D>;
+	queryHandlers: ResolveQueryHandlers<D>;
+	commandHandlers: ResolveCommandHandlers<D>;
 } & ResolveForRootConfig<D>;
 
 export type ExtractModuleDef<T> = T extends {
@@ -197,6 +254,8 @@ type StaticModuleDef = {
 	providers?: DefProviderMap;
 	exports?: DefProviderMap;
 	imports?: ModuleImport[];
+	queryHandlers: readonly any[];
+	commandHandlers: readonly any[];
 };
 type DynamicModuleDef = StaticModuleDef & WithForRootConfig;
 
@@ -206,8 +265,8 @@ type ExtractDeps<Def> = Def extends {
 	? D
 	: Record<string, unknown>;
 
-export type ClassHandler = {
-	useClass: HandlerConstructor;
+export type ClassHandler<H extends HandlerConstructor<any> = HandlerConstructor<any>> = {
+	useClass: H;
 } & BuildResolverOptions<any>;
 
 export type ControllerConstructor = Constructor<Controller>;
@@ -229,6 +288,24 @@ type WithExports<Def extends StaticModuleDef> =
 			? { exports?: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
 			: { exports: ToModuleProviderMap<Def["exports"], ExtractDeps<Def>> }
 		: { exports?: never };
+
+type ToModuleHandlerArray<T extends readonly any[]> = T extends readonly []
+	? readonly []
+	: {
+			readonly [K in keyof T]: T[K] extends HandlerConstructor<any>
+				? T[K] | ClassHandler<T[K]>
+				: T[K];
+		};
+
+type WithQueryHandlers<Def extends StaticModuleDef> =
+	Def["queryHandlers"] extends readonly []
+		? { queryHandlers?: ToModuleHandlerArray<Def["queryHandlers"]> }
+		: { queryHandlers: ToModuleHandlerArray<Def["queryHandlers"]> };
+
+type WithCommandHandlers<Def extends StaticModuleDef> =
+	Def["commandHandlers"] extends readonly []
+		? { commandHandlers?: ToModuleHandlerArray<Def["commandHandlers"]> }
+		: { commandHandlers: ToModuleHandlerArray<Def["commandHandlers"]> };
 
 // Type constraint for modules passed to forwardRef when using ModuleRef
 type ForwardRefModule<MDef> = MDef extends {
@@ -265,13 +342,13 @@ type AnyModuleRef = ModuleRef<any>;
 
 export type StaticModule<Def extends StaticModuleDef> = {
 	name: string;
-	queryHandlers?: (ClassHandler | HandlerConstructor)[];
-	commandHandlers?: (ClassHandler | HandlerConstructor)[];
 	controllers?: (ClassController | ControllerConstructor | Constructor<any>)[];
 	providerOptions?: Partial<BuildResolverOptions<any>>;
 } & WithProviders<Def> &
 	WithExports<Def> &
-	WithImports<Def>;
+	WithImports<Def> &
+	WithQueryHandlers<Def> &
+	WithCommandHandlers<Def>;
 
 type ClassController = {
 	useClass: ControllerConstructor | Constructor<any>;

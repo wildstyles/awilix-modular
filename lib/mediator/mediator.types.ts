@@ -113,11 +113,3 @@ export type Middleware = MiddlewareConfig<
 
 export type AreAllTagsAdded<AddedTags extends keyof MiddlewareTagRegistry> =
 	Exclude<keyof MiddlewareTagRegistry, AddedTags> extends never ? true : false;
-
-// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
-export interface QueryRegistry {}
-// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
-export interface CommandRegistry {}
-
-// Helper to resolve registry - falls back to AnyContract if not augmented
-export type ResolveRegistry<R> = keyof R extends never ? AnyContract : R;

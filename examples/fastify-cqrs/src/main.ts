@@ -2,11 +2,7 @@ import { DIContext, Mediator } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import { FastifyInstance } from "@/types.js";
-import {
-	AppModule,
-	type CommandContracts,
-	type QueryContracts,
-} from "@/modules/index.js";
+import { AppModule } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
 import { RequestContext } from "./request-context.middleware.js";
 import {
@@ -49,9 +45,6 @@ async function bootstrap() {
 bootstrap();
 
 declare module "awilix-modular" {
-	interface QueryRegistry extends QueryContracts {}
-	interface CommandRegistry extends CommandContracts {}
-
 	interface ExecutionContext extends RequestContext {}
 
 	interface CommonDependencies {

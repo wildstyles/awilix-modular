@@ -12,8 +12,6 @@ import { Owners1Service } from "./owners1.service.js";
 import { GetOwnersQueryHandler } from "./get-owners.q-handler.js";
 import { OwnersController } from "./owners.controller.js";
 
-export type OwnersModuleQueryContracts = typeof GetOwnersQueryHandler.contract;
-
 export type OwnersModuleDef = ModuleDef<{
 	providers: {
 		ownersService: OwnersService;
@@ -21,6 +19,7 @@ export type OwnersModuleDef = ModuleDef<{
 	};
 	exportKeys: "ownersService" | "owners1Service";
 	imports: [ModuleRef<CatsModuleDef>];
+	queryHandlers: [typeof GetOwnersQueryHandler];
 }>;
 
 export type Deps = OwnersModuleDef["deps"];
