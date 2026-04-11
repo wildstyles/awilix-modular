@@ -1,45 +1,27 @@
-import {
-	type AwilixContainer,
-	asClass,
-	asFunction,
-	asValue,
-	type BuildResolverOptions,
-	type ContainerOptions,
-	createBuildResolver,
-	createContainer,
-	InjectionMode,
-	Lifetime,
-	type Resolver,
-} from "awilix";
+import * as Awilix from "awilix";
 import type { RouteRegistration } from "../http/openapi-builder.js";
-import type { CompleteMediatorBuilder } from "../mediator/mediator.js";
+import type { CompleteMediatorBuilder } from "../mediator/mediator-builder.js";
 import { ControllerProcessor } from "./controller-processor.js";
-import * as ERRORS from "./di-context.errors.js";
-import {
-	type AnyProvider,
-	type ClassHandler,
-	isClassProvider,
-	isCostructorProvider,
-	isFactoryProvider,
-	isForwardRef,
-	isPlainFunction,
-	isPrimitive,
-	type AnyModule as M,
-} from "./di-context.types.js";
+import * as ERRORS from "./errors.js";
 import { HandlerProcessor } from "./handler-processor.js";
+import type { AnyModule as M } from "./module.types.js";
+import type { AnyProvider } from "./provider.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
+import * as GUARGS from "./type-guards.js";
 
 export interface DiContextOptions {
 	framework: unknown;
 	queryMediatorBuilder?: CompleteMediatorBuilder;
 	commandMediatorBuilder?: CompleteMediatorBuilder;
 	beforeRouteRegistered?: (params: RouteRegistration) => any[];
-	containerOptions?: ContainerOptions;
+	containerOptions?: Awilix.ContainerOptions;
 	rootProviders?: Record<string, AnyProvider>;
-	providerOptions?: Partial<BuildResolverOptions<any>>;
+	providerOptions?: Partial<Awilix.BuildResolverOptions<any>>;
 }
 
-export interface ModuleScopeTree<S extends AwilixContainer = AwilixContainer> {
+export interface ModuleScopeTree<
+	S extends Awilix.AwilixContainer = Awilix.AwilixContainer,
+> {
 	name: string;
 	scope: S;
 	importedScopes: Map<string, ModuleScopeTree>;
@@ -49,29 +31,26 @@ const ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL = Symbol("rootProvidersResolverMap");
 
 export class DIContext {
 	private readonly forwardRefModules = new WeakSet<M>();
-	private readonly moduleScopeMap = new WeakMap<M, AwilixContainer>();
+	private readonly moduleScopeMap = new WeakMap<M, Awilix.AwilixContainer>();
 	private readonly sorter = new ProviderDependencySorter();
 	private readonly controllerProcessor: ControllerProcessor;
 	private readonly handlerProcessor: HandlerProcessor;
 	private readonly options: DiContextOptions;
-	private readonly rootContainer: AwilixContainer;
+	private readonly rootContainer: Awilix.AwilixContainer;
 
 	private constructor(options: DiContextOptions) {
 		this.options = {
 			...options,
 			containerOptions: {
 				strict: true,
-				injectionMode: InjectionMode.CLASSIC,
+				injectionMode: Awilix.InjectionMode.CLASSIC,
 				...options.containerOptions,
 			},
 			providerOptions: {
-				lifetime: Lifetime.SINGLETON,
+				lifetime: Awilix.Lifetime.SINGLETON,
 				...options.providerOptions,
 			},
 		};
-
-		// registration per module??
-		// augment type for initial type passed to execute from framework
 
 		this.controllerProcessor = new ControllerProcessor(
 			this.options.framework,
@@ -84,7 +63,7 @@ export class DIContext {
 			this.options.commandMediatorBuilder,
 		);
 
-		this.rootContainer = createContainer(this.options.containerOptions);
+		this.rootContainer = Awilix.createContainer(this.options.containerOptions);
 		this.initializeRootProviders();
 	}
 
@@ -98,12 +77,12 @@ export class DIContext {
 		);
 	}
 
-	private createContainerWithRootProviders(): AwilixContainer {
-		const container = createContainer(this.options.containerOptions);
+	private createContainerWithRootProviders(): Awilix.AwilixContainer {
+		const container = Awilix.createContainer(this.options.containerOptions);
 		container.register(
 			this.rootContainer.resolve(ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL) as Record<
 				string,
-				Resolver<any>
+				Awilix.Resolver<any>
 			>,
 		);
 
@@ -130,8 +109,8 @@ export class DIContext {
 
 		const wrappedResolvers = Object.entries(
 			rootProvidersModule.providers || {},
-		).reduce<Record<string, Resolver<any>>>((acc, [key, provider]) => {
-			acc[key] = asFunction(
+		).reduce<Record<string, Awilix.Resolver<any>>>((acc, [key, provider]) => {
+			acc[key] = Awilix.asFunction(
 				() => this.rootContainer.resolve(key),
 				this.extractResolverOptions(rootProvidersModule, provider),
 			);
@@ -140,13 +119,13 @@ export class DIContext {
 		}, {});
 
 		this.rootContainer.register({
-			[ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL]: asValue(wrappedResolvers),
+			[ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL]: Awilix.asValue(wrappedResolvers),
 		});
 	}
 
 	private registerModuleWithScope(
 		m: M,
-		scope: AwilixContainer,
+		scope: Awilix.AwilixContainer,
 		moduleChain: M[],
 	): ModuleScopeTree {
 		this.ensureImportedModulesUniqueness(m);
@@ -225,59 +204,65 @@ export class DIContext {
 		wrapForExport,
 	}: {
 		provider: AnyProvider;
-		resolutionScope: AwilixContainer;
+		resolutionScope: Awilix.AwilixContainer;
 		module: M;
 		wrapForExport?: boolean;
-	}): Resolver<any> {
-		if (isPrimitive(provider)) {
-			return asValue(provider);
+	}): Awilix.Resolver<any> {
+		if (GUARGS.isPrimitive(provider)) {
+			return Awilix.asValue(provider);
 		}
 
-		if (isPlainFunction(provider) && !isCostructorProvider(provider)) {
-			return asValue(provider);
+		if (
+			GUARGS.isPlainFunction(provider) &&
+			!GUARGS.isCostructorProvider(provider)
+		) {
+			return Awilix.asValue(provider);
 		}
 
 		// Handle plain objects as values (not class instances or providers)
 		if (
 			typeof provider === "object" &&
-			!isCostructorProvider(provider) &&
-			!isFactoryProvider(provider) &&
-			!isClassProvider(provider)
+			!GUARGS.isCostructorProvider(provider) &&
+			!GUARGS.isFactoryProvider(provider) &&
+			!GUARGS.isClassProvider(provider)
 		) {
-			return asValue(provider);
+			return Awilix.asValue(provider);
 		}
 
 		const resolverOptions = this.extractResolverOptions(module, provider);
 
-		if (isCostructorProvider(provider)) {
-			const resolver = asClass(provider, resolverOptions);
+		if (GUARGS.isCostructorProvider(provider)) {
+			const resolver = Awilix.asClass(provider, resolverOptions);
 
 			return wrapForExport
-				? asFunction(() => resolver.resolve(resolutionScope), resolverOptions)
+				? Awilix.asFunction(
+						() => resolver.resolve(resolutionScope),
+						resolverOptions,
+					)
 				: resolver;
 		}
 
-		if (isFactoryProvider(provider)) {
+		if (GUARGS.isFactoryProvider(provider)) {
 			const factoryDeps = (provider.inject || []).map((k) =>
 				// biome-ignore lint/style/noNonNullAssertion: dependencies are validated by ProviderDependencySorter
 				resolutionScope.registrations[k]!.resolve(resolutionScope),
 			);
 
-			return asFunction(
+			return Awilix.asFunction(
 				() => provider.useFactory(...factoryDeps),
 				resolverOptions,
 			);
 		}
 
-		const baseResolver = asClass(provider.useClass, resolverOptions);
+		const baseResolver = Awilix.asClass(provider.useClass, resolverOptions);
 		const resolver = provider.allowCircular
 			? this.createProxyResolver(baseResolver, resolverOptions, wrapForExport)
 			: baseResolver;
 
 		return wrapForExport
-			? asFunction(() => {
+			? Awilix.asFunction(() => {
 					return resolver.resolve(
-						resolverOptions.lifetime === Lifetime.SINGLETON
+						resolverOptions.lifetime === Awilix.Lifetime.SINGLETON
 							? resolutionScope
 							: resolutionScope.createScope(),
 					);
@@ -287,14 +272,14 @@ export class DIContext {
 
 	private extractResolverOptions(
 		module: M,
-		provider: AnyProvider | ClassHandler,
-	): BuildResolverOptions<any> {
+		provider: AnyProvider,
+	): Awilix.BuildResolverOptions<any> {
 		const baseOptions = {
 			...this.options.providerOptions,
 			...module.providerOptions,
 		};
 
-		if (isClassProvider(provider)) {
+		if (GUARGS.isClassProvider(provider)) {
 			const { useClass, allowCircular, ...providerOptions } = provider;
 
 			return {
@@ -303,8 +288,10 @@ export class DIContext {
 			};
 		}
 
-		if (isFactoryProvider(provider)) {
-			const { useClass, ...providerOptions } = isClassProvider(provider.provide)
+		if (GUARGS.isFactoryProvider(provider)) {
+			const { useClass, ...providerOptions } = GUARGS.isClassProvider(
+				provider.provide,
+			)
 				? provider.provide
 				: {};
 
@@ -319,11 +306,11 @@ export class DIContext {
 
 	// https://github.com/jeffijoe/awilix/pull/133#issuecomment-492989852
 	private createProxyResolver(
-		resolver: Resolver<any>,
-		options: BuildResolverOptions<any>,
+		resolver: Awilix.Resolver<any>,
+		options: Awilix.BuildResolverOptions<any>,
 		wrapForExport?: boolean,
 	) {
-		return createBuildResolver({
+		return Awilix.createBuildResolver({
 			...options,
 			resolve(container) {
 				let resolved: any = null;
@@ -332,7 +319,10 @@ export class DIContext {
 					{},
 					{
 						get(_, name) {
-							if (wrapForExport && options?.lifetime === Lifetime.TRANSIENT) {
+							if (
+								wrapForExport &&
+								options?.lifetime === Awilix.Lifetime.TRANSIENT
+							) {
 								return resolver.resolve(container)[name];
 							}
 
@@ -349,7 +339,8 @@ export class DIContext {
 	}
 
 	private markModuleIfImportsUseForwardRef(m: M): void {
-		if ((m.imports || []).some(isForwardRef)) this.forwardRefModules.add(m);
+		if ((m.imports || []).some(GUARGS.isForwardRef))
+			this.forwardRefModules.add(m);
 	}
 
 	private ensureCircularDependencyHasForwardRef(m: M, moduleChain: M[]): void {
@@ -401,7 +392,7 @@ export class DIContext {
 
 	private resolveImports(m: M): M[] {
 		return (m.imports || []).map((importItem) =>
-			isForwardRef(importItem) ? importItem.resolve() : importItem,
+			GUARGS.isForwardRef(importItem) ? importItem.resolve() : importItem,
 		);
 	}
 

@@ -1,9 +1,6 @@
-import * as ERRORS from "./di-context.errors.js";
-import {
-	isFactoryProvider,
-	isForwardRef,
-	type AnyModule as M,
-} from "./di-context.types.js";
+import * as ERRORS from "./errors.js";
+import type { AnyModule as M } from "./module.types.js";
+import { isFactoryProvider, isForwardRef } from "./type-guards.js";
 
 type ProviderDepsGraph = {
 	graph: Map<string, string[]>;

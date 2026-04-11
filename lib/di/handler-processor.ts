@@ -1,15 +1,10 @@
-import {
-	type AwilixContainer,
-	asClass,
-	asValue,
-	type BuildResolverOptions,
-	Lifetime,
-} from "awilix";
-import type { AnyContract, Handler } from "../mediator/mediator.types.js";
-import * as ERRORS from "./di-context.errors.js";
+import * as Awilix from "awilix";
+import type { AnyContract, Handler } from "../mediator/handler.types.js";
 import type { DiContextOptions } from "./di-context.js";
-import type { ClassHandler, AnyModule as M } from "./di-context.types.js";
-import { isClassHandler } from "./di-context.types.js";
+import * as ERRORS from "./errors.js";
+import type { AnyModule as M } from "./module.types.js";
+import type { ClassHandler } from "./provider.types.js";
+import { isClassHandler } from "./type-guards.js";
 
 export const HandlerType = {
 	Query: "query",
@@ -20,14 +15,14 @@ export type HandlerType = (typeof HandlerType)[keyof typeof HandlerType];
 
 export class HandlerProcessor {
 	constructor(
-		private readonly providerOptions: Partial<BuildResolverOptions<any>>,
+		private readonly providerOptions: Partial<Awilix.BuildResolverOptions<any>>,
 		private readonly queryMediatorBuilder: DiContextOptions["queryMediatorBuilder"],
 		private readonly commandMediatorBuilder: DiContextOptions["commandMediatorBuilder"],
 	) {}
 
 	public processHandlers(
 		m: M,
-		scope: AwilixContainer,
+		scope: Awilix.AwilixContainer,
 		handlerType: HandlerType,
 	): void {
 		const config = {
@@ -61,12 +56,14 @@ export class HandlerProcessor {
 			const handlerSymbol = Symbol(`${prefix}-handler_${HandlerClass.name}`);
 
 			scope.register({
-				[handlerSymbol]: asClass(HandlerClass, options),
+				[handlerSymbol]: Awilix.asClass(HandlerClass, options),
 			});
 
 			const resolveHandler = (): Handler<AnyContract> => {
 				const requestScope =
-					options.lifetime === Lifetime.SINGLETON ? scope : scope.createScope();
+					options.lifetime === Awilix.Lifetime.SINGLETON
+						? scope
+						: scope.createScope();
 
 				return requestScope.resolve(handlerSymbol);
 			};
@@ -86,7 +83,7 @@ export class HandlerProcessor {
 		}
 
 		scope.register({
-			[`${handlerType}Mediator`]: asValue(mediator),
+			[`${handlerType}Mediator`]: Awilix.asValue(mediator),
 		});
 	}
 
@@ -103,7 +100,7 @@ export class HandlerProcessor {
 	private extractHandlerOptions(
 		m: M,
 		handler: ClassHandler,
-	): BuildResolverOptions<any> {
+	): Awilix.BuildResolverOptions<any> {
 		const { useClass: _, ...awilixOptions } = handler;
 
 		return {

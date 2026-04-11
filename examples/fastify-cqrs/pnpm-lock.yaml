@@ -23,6 +23,9 @@ importers:
       awilix:
         specifier: ^10.0.2
         version: 10.0.2
+      awilix-modular:
+        specifier: file:../..
+        version: file:../..(awilix@10.0.2)
       fastify:
         specifier: ^5.2.0
         version: 5.8.2
@@ -278,6 +281,11 @@ packages:
 
   avvio@9.2.0:
     resolution: {integrity: sha512-2t/sy01ArdHHE0vRH5Hsay+RtCZt3dLPji7W7/MMOCEgze5b7SNDC4j5H6FnVgPkI1MTNFGzHdHrVXDDl7QSSQ==}
+
+  awilix-modular@file:../..:
+    resolution: {directory: ../.., type: directory}
+    peerDependencies:
+      awilix: '>=9.0.0'
 
   awilix@10.0.2:
     resolution: {integrity: sha512-hFatb7eZFdtiWjjmGRSm/K/uxZpmcBlM+YoeMB3VpOPXk3xa6+7zctg3LRbUzoimom5bwGrePF0jXReO6b4zNQ==}
@@ -773,6 +781,10 @@ snapshots:
     dependencies:
       '@fastify/error': 4.2.0
       fastq: 1.20.1
+
+  awilix-modular@file:../..(awilix@10.0.2):
+    dependencies:
+      awilix: 10.0.2
 
   awilix@10.0.2:
     dependencies:

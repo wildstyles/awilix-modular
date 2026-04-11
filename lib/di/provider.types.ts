@@ -1,0 +1,92 @@
+import type { BuildResolverOptions, Constructor } from "awilix";
+import type { AnyContract, Handler } from "lib/mediator/handler.types.js";
+
+export type DefProviderMap = Record<string, object | string | boolean | number>;
+
+// ============================================================================
+// Provider Types
+// ============================================================================
+
+export type ConstructorProvider<T extends object = object> = Constructor<T>;
+export type PrimitiveProvider = string | number | boolean | symbol | bigint;
+export type FunctionProvider = (...args: any[]) => any;
+
+export type FactoryProvider<
+	T extends object,
+	DepsMap extends Record<string, unknown>,
+	Keys extends readonly (keyof DepsMap)[],
+	Strict extends boolean = true,
+> = {
+	provide: Omit<ClassProvider<T>, "allowCircular"> | ConstructorProvider<T>;
+	inject?: Keys;
+	useFactory: Strict extends true
+		? (...args: MapKeysToValues<DepsMap, Keys>) => T
+		: (...args: any[]) => T;
+};
+
+export type ClassProvider<T extends object> = {
+	useClass: Constructor<T>;
+	allowCircular?: boolean;
+} & BuildResolverOptions<T>;
+
+export type Provider<
+	T extends object,
+	DepsMap extends Record<string, unknown> = Record<string, unknown>,
+> =
+	| FactoryProvider<T, DepsMap, readonly (keyof DepsMap)[], false>
+	| ClassProvider<T>
+	| ConstructorProvider<T>;
+
+export type AnyProvider =
+	| FactoryProvider<any, any, readonly string[], false>
+	| ClassProvider<any>
+	| ConstructorProvider<any>
+	| PrimitiveProvider
+	| FunctionProvider
+	| object;
+
+// ============================================================================
+// Controller Types
+// ============================================================================
+
+export type ConstructorController = Constructor<Controller>;
+
+export type ClassController = {
+	useClass: ConstructorController | Constructor<any>;
+} & BuildResolverOptions<any>;
+
+export type AnyController =
+	| ConstructorController
+	| ClassController
+	| Constructor<any>;
+
+export interface Controller {
+	registerRoutes: () => void;
+}
+
+// ============================================================================
+// Handler Types
+// ============================================================================
+
+export interface ConstructorHandler<C extends AnyContract = AnyContract> {
+	readonly key: keyof C;
+	readonly contract: C;
+	new (...args: any[]): Handler<C>;
+}
+
+export type ClassHandler<
+	H extends ConstructorHandler<any> = ConstructorHandler<any>,
+> = {
+	useClass: H;
+} & BuildResolverOptions<any>;
+
+// ============================================================================
+// Provider Mapping Helper
+// ============================================================================
+
+type MapKeysToValues<
+	DepsMap extends Record<string, unknown>,
+	Keys extends readonly (keyof DepsMap)[],
+> = {
+	[K in keyof Keys]: Keys[K] extends keyof DepsMap ? DepsMap[Keys[K]] : never;
+};

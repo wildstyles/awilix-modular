@@ -1,4 +1,4 @@
-import { DIContext, Mediator } from "awilix-modular";
+import { DIContext, MediatorBuilder } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import { FastifyInstance } from "@/types.js";
@@ -21,12 +21,12 @@ async function bootstrap() {
 		rootProviders: {
 			app: fastify,
 		},
-		queryMediatorBuilder: Mediator.initializeBuilder()
+		queryMediatorBuilder: new MediatorBuilder()
 			.addMiddleware(loggingMiddleware)
 			.addMiddleware(authMiddleware)
 			.addMiddleware(tenantMiddleware)
 			.build(),
-		commandMediatorBuilder: Mediator.initializeBuilder()
+		commandMediatorBuilder: new MediatorBuilder()
 			.addMiddleware(loggingMiddleware)
 			.addMiddleware(authMiddleware)
 			.addMiddleware(tenantMiddleware)

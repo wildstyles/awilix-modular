@@ -1,9 +1,4 @@
-import {
-	type AwilixContainer,
-	asClass,
-	type BuildResolverOptions,
-	Lifetime,
-} from "awilix";
+import * as Awilix from "awilix";
 import {
 	type ExpressFramework,
 	type ExpressMethod,
@@ -18,14 +13,11 @@ import {
 	type RouteSchema,
 	STATE,
 } from "../http/state-util.js";
-import * as ERRORS from "./di-context.errors.js";
 import type { DiContextOptions } from "./di-context.js";
-import type {
-	Controller,
-	ControllerConstructor,
-	AnyModule as M,
-} from "./di-context.types.js";
-import { isClassController } from "./di-context.types.js";
+import * as ERRORS from "./errors.js";
+import type { AnyModule as M } from "./module.types.js";
+import type { ConstructorController, Controller } from "./provider.types.js";
+import { isClassController } from "./type-guards.js";
 
 type RouteRegistrationParams = {
 	verb: HttpVerb;
@@ -37,7 +29,7 @@ type RouteRegistrationParams = {
 
 export class ControllerProcessor {
 	private readonly registeredControllers = new WeakMap<
-		ControllerConstructor,
+		ConstructorController,
 		M
 	>();
 	private readonly frameworkType: HttpFramework;
@@ -54,13 +46,13 @@ export class ControllerProcessor {
 
 	constructor(
 		private readonly framework: unknown,
-		private readonly providerOptions: Partial<BuildResolverOptions<any>>,
+		private readonly providerOptions: Partial<Awilix.BuildResolverOptions<any>>,
 		private readonly beforeRouteRegistered: DiContextOptions["beforeRouteRegistered"],
 	) {
 		this.frameworkType = this.detectFramework();
 	}
 
-	public processControllers(m: M, diScope: AwilixContainer): void {
+	public processControllers(m: M, diScope: Awilix.AwilixContainer): void {
 		if (!m.controllers?.length) return;
 		if (m.registerControllers === false) return;
 
@@ -83,10 +75,10 @@ export class ControllerProcessor {
 					...m.providerOptions,
 					...awilixOptions,
 				};
-				const isWithNewScope = options.lifetime !== Lifetime.SINGLETON;
+				const isWithNewScope = options.lifetime !== Awilix.Lifetime.SINGLETON;
 
 				diScope.register({
-					[controllerSymbol]: asClass(useClass, {
+					[controllerSymbol]: Awilix.asClass(useClass, {
 						...options,
 						...(isWithNewScope && {
 							injector: () => ({
@@ -133,7 +125,7 @@ export class ControllerProcessor {
 
 	private resolveBySymbol(
 		symbol: symbol,
-		scope: AwilixContainer,
+		scope: Awilix.AwilixContainer,
 		withNewScope: boolean,
 	): Controller {
 		if (withNewScope) return scope.createScope().resolve(symbol);
@@ -142,7 +134,7 @@ export class ControllerProcessor {
 	}
 
 	private processDecoratedController(
-		target: ControllerConstructor,
+		target: ConstructorController,
 		resolve: () => Controller,
 	) {
 		const state = this.getDecoratedState(target);
@@ -185,7 +177,7 @@ export class ControllerProcessor {
 		});
 	}
 
-	private getDecoratedState(target: ControllerConstructor): IState | undefined {
+	private getDecoratedState(target: ConstructorController): IState | undefined {
 		const symbol = Object.getOwnPropertySymbols(target).find(
 			(s) => s.toString() === "Symbol(Symbol.metadata)",
 		);

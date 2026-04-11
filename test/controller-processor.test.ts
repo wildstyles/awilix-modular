@@ -1,14 +1,11 @@
 import { AwilixResolutionError, Lifetime } from "awilix";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { controller, GET, POST, schema } from "../lib/http/decorators.js";
-import * as ERRORS from "../lib/di/di-context.errors.js";
 import { DIContext, type DiContextOptions } from "../lib/di/di-context.js";
-import {
-	type AnyModule,
-	type Controller,
-	createDynamicModule,
-} from "../lib/di/di-context.types.js";
-import type { ExpressFramework } from "../lib/http/framework.types.js";
+import * as ERRORS from "../lib/di/errors.js";
+import type { AnyModule } from "../lib/di/module.types.js";
+import { createDynamicModule } from "../lib/di/module-factories.js";
+import type { Controller } from "../lib/di/provider.types.js";
+import { controller, GET, POST, schema } from "../lib/http/decorators.js";
 
 describe("ControllerProcessor", () => {
 	const createMockExpress = () => {

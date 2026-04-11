@@ -1,18 +1,16 @@
-import * as errors from "./mediator.errors.js";
+import * as errors from "./errors.js";
 import type {
-	AnyContext,
 	AnyContract,
-	AreAllTagsAdded,
-	AreDependenciesSatisfied,
-	EmptyContext,
-	ExecutionContext,
 	Executor,
 	ExtractPayload,
 	ExtractResponse,
+} from "./handler.types.js";
+import type {
+	AnyContext,
+	ExecutionContext,
 	Middleware,
-	MiddlewareConfig,
 	MiddlewareTagRegistry,
-} from "./mediator.types.js";
+} from "./middleware.types.js";
 
 type HandlerMiddlewareOptions = {
 	middlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
@@ -23,85 +21,14 @@ interface HandlerRegistration extends HandlerMiddlewareOptions {
 	executor: Executor;
 }
 
-export interface CompleteMediatorBuilder {
-	__buildForModule(moduleName: string): Mediator<AnyContract>;
-}
-
-const mediatorConstructorToken = Symbol("MediatorConstructorToken");
-
-export class MediatorBuilder<
-	AccumulatedContext extends AnyContext = EmptyContext,
-	AddedTags extends keyof MiddlewareTagRegistry = never,
-> {
-	private middlewares: Middleware[] = [];
-
-	addMiddleware<
-		Tag extends Exclude<keyof MiddlewareTagRegistry, AddedTags>,
-		Requires extends keyof MiddlewareTagRegistry | never = never,
-	>(
-		middleware: [Requires] extends [never]
-			? MiddlewareConfig<Tag>
-			: AreDependenciesSatisfied<AccumulatedContext, Requires> extends true
-				? MiddlewareConfig<Tag, Requires>
-				: never,
-	): MediatorBuilder<
-		AccumulatedContext & MiddlewareTagRegistry[Tag],
-		AddedTags | Tag
-	> {
-		const { tag, requires } = middleware;
-
-		const isDuplicate = this.middlewares.some((mw) => mw.tag === tag);
-
-		if (isDuplicate) {
-			throw new errors.DuplicateMiddlewareError(tag);
-		}
-
-		const hasRequired = this.middlewares.some((mw) => mw.tag === requires);
-
-		if (requires && !hasRequired) {
-			throw new errors.MiddlewareRequiresDependencyError(tag, requires);
-		}
-
-		this.middlewares.push(middleware as Middleware);
-
-		return this;
-	}
-
-	build: AreAllTagsAdded<AddedTags> extends true
-		? () => CompleteMediatorBuilder
-		: never = () => {
-		return {
-			__buildForModule: (moduleName) => {
-				return new Mediator(
-					this.middlewares,
-					moduleName,
-					mediatorConstructorToken,
-				);
-			},
-		};
-	};
-}
-
 export class Mediator<C extends AnyContract> {
 	private handlers = new Map<string, HandlerRegistration>();
 	private middlewares: Middleware[];
 	private moduleName: string;
 
-	constructor(
-		middlewares: Middleware[],
-		moduleName: string,
-		token: typeof mediatorConstructorToken,
-	) {
-		if (token !== mediatorConstructorToken) {
-			throw new errors.CannotConstructMediatorDirectly();
-		}
-
+	constructor(middlewares: Middleware[], moduleName: string) {
 		this.moduleName = moduleName;
 		this.middlewares = middlewares;
-	}
-
-	static initializeBuilder() {
-		return new MediatorBuilder();
 	}
 
 	register(

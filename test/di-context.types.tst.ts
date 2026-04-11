@@ -1,16 +1,18 @@
 import { describe, expect, it } from "tstyche";
+import type { EmptyObject } from "../lib/di/common.types.js";
+import type {
+	DynamicModule as DM,
+	StaticModule as M,
+} from "../lib/di/module.types.js";
 import type {
 	CommonDependencies,
 	ModuleDef as D,
-	DynamicModule as DM,
-	EmptyObject,
-	StaticModule as M,
-} from "../lib/di/di-context.types.js";
+} from "../lib/di/module-def.types.js";
 import {
 	createDynamicModule,
 	createFactoryProvider,
 	createStaticModule,
-} from "../lib/di/di-context.types.js";
+} from "../lib/di/module-factories.js";
 
 describe("Module", () => {
 	class P1 {
