@@ -34,7 +34,7 @@ style: |
 
 ### Type-safe, modular Dedendency Injection for Node.js
 
-_How creating a sportsman POC turned into my first open-source project: a lightweight alternative to NestJS_ ⚡
+_How creating a sportyman POC turned into my first open-source project: a lightweight alternative to NestJS_ ⚡
 
 ---
 
@@ -179,9 +179,13 @@ class UserService {
 
 ---
 
-## Key Feature 1: Service deps with minimum boilderplate imports 🔒
+## Key Feature 1: Minimum Boilerplate Imports 🔒
 
-### NestJS approach:
+<div class="columns">
+
+<div>
+
+### NestJS approach
 
 ```typescript
 import { Logger } from "./logger.service";
@@ -195,29 +199,41 @@ class UserService {
   constructor(
     private readonly logger: Logger,
     private readonly config: ConfigService,
+    private readonly database: DatabaseService,
+    private readonly email: EmailService,
+    private readonly order: OrderService,
     // ... repeat imports in every file
   ) {}
 }
 ```
 
----
+</div>
 
-## Key Feature 1: Type Safety
+<div>
 
-### awilix-modular approach:
+### awilix-modular approach
 
 ```typescript
-import { UserModuleDeps } from "./user.module"; // ONE import
+import { UserModuleDeps } from "./user.module";
+// ONE import - single source of truth
 
 class UserService {
   constructor(
     private readonly logger: UserModuleDeps["logger"],
     private readonly config: UserModuleDeps["config"],
     private readonly database: UserModuleDeps["database"],
-    // All types from single source of truth
+    private readonly email: UserModuleDeps["emailService"],
+    private readonly order: UserModuleDeps["orderService"],
+    // All types from module definition
   ) {}
 }
 ```
+
+**Define once in ModuleDef, use everywhere with full autocomplete!**
+
+</div>
+
+</div>
 
 ---
 
@@ -227,9 +243,12 @@ Works with **any** HTTP framework:
 
 ```typescript
 class UserController implements Controller {
-  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+  constructor(
+    private readonly app: UserModuleDeps["app"],
+    private readonly userService: UserModuleDeps["userService"],
+  ) {}
 
-  registerRoutes(app: Express | FastifyInstance | Hono) {
+  registerRoutes() {
     // Use framework's native API directly
     app.get("/users/:id", async (req, res) => {
       const user = await this.userService.getUser(req.params.id);
@@ -240,30 +259,6 @@ class UserController implements Controller {
 ```
 
 **No abstraction layer. Direct framework access.**
-
----
-
-## The Killer Feature: Gradual Integration 🎯
-
-### **NestJS**: All-or-nothing ⛔
-
-You must rewrite your entire app to use NestJS modules.
-
-### **awilix-modular**: Gradual migration ✅
-
-You can add modular DI to **existing Express/Fastify apps** without rewriting:
-
-```typescript
-const app = express();
-
-// Your existing routes still work
-app.get("/old-route", handler);
-
-// Add new modular features gradually
-DIContext.create(NewModule, { framework: app });
-
-// Both coexist perfectly!
-```
 
 ---
 
@@ -292,6 +287,93 @@ export class UserController {
 ```
 
 **Native Stage 3 decorators - no `experimentalDecorators` needed!**
+
+---
+
+## Key Feature 4: True Business Logic Separation with CQRS 🧠
+
+JavaScript frameworks **don't encourage canonical separation** from architecture books (DDD, Clean Architecture).
+
+<div class="columns">
+
+<div>
+
+### NestJS Guards
+
+Framework middleware, **not true separation**:
+
+```typescript
+// ❌ "Application logic" still coupled to HTTP
+@Injectable()
+class AuthGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context
+      .switchToHttp()
+      .getRequest(); // HTTP dependency!
+    const user = request.user;
+    return user?.isAdmin;
+  }
+}
+
+@UseGuards(AuthGuard)
+async getUsers() { }
+// ❌ Can't reuse in cron jobs or message queues
+```
+
+</div>
+
+<div>
+
+### awilix-modular Mediator
+
+True **framework-agnostic** logic:
+
+```typescript
+// ✅ Business logic in application layer
+const authMiddleware: MiddlewareConfig<"auth"> = {
+  tag: "auth",
+  // executionContext - that's only data extracted from HTTP layer
+  execute: async (payload, context, executionContext, next) => {
+    const user = await verifyToken(executionContext.token);
+    // No HTTP objects - just extracted data
+    if (!user) throw new UnauthorizedError();
+    // context is a separate application layer data
+    return next(payload, { ...context, userId: user.id });
+  },
+};
+
+// ✅ Works in HTTP, cron, queue, CLI! Relies only on contract
+```
+
+</div>
+
+</div>
+
+**CQRS + Mediator = canonical separation** as books recommend.
+
+---
+
+## The Killer Feature: Gradual Integration 🎯
+
+### **NestJS**: All-or-nothing ⛔
+
+You must rewrite your entire app to use NestJS modules.
+
+### **awilix-modular**: Gradual migration ✅
+
+You can add modular DI to **existing Express/Fastify apps** without rewriting:
+
+```typescript
+const app = express();
+
+// Your existing routes still work
+app.get("/old-route", handler);
+
+// Add new modular features gradually
+DIContext.create(NewModule, { framework: app });
+
+// Both coexist perfectly!
+```
 
 ---
 
@@ -342,16 +424,6 @@ export class UserController {
 - **Circular dependencies** support (cleaner than NestJS)
 - **100% test coverage**
 - **type tests** - interesting finding
-
----
-
-## Roadmap 🗺️
-
-**What's next:**
-
-1. **Schema decorators** - validation + Swagger generation for endpoints
-2. **Better IDE navigation** - solve "go to definition" jumping to `ModuleDeps["service"]` instead of actual class
-3. **HTTP error handling** - specific error classes with status codes
 
 ---
 
