@@ -1,8 +1,16 @@
 import type { BuildResolverOptions, Constructor } from "awilix";
 import type { AnyContract, Handler } from "lib/mediator/handler.types.js";
+import type {
+	AnyMiddlewareContract,
+	Middleware,
+} from "lib/mediator/middleware.types.js";
 
 export type DefProviderMap = Record<string, object | string | boolean | number>;
 
+/**
+ * PreHandler map - accepts any type, will be converted to constructor type internally
+ */
+export type DefPreHandlerMap = Record<string, object>;
 // ============================================================================
 // Provider Types
 // ============================================================================
@@ -69,15 +77,29 @@ export interface Controller {
 // ============================================================================
 
 export interface ConstructorHandler<C extends AnyContract = AnyContract> {
-	readonly key: keyof C;
-	readonly contract: C;
 	new (...args: any[]): Handler<C>;
 }
 
-export type ClassHandler<
-	H extends ConstructorHandler<any> = ConstructorHandler<any>,
-> = {
+export type ClassHandler<H extends Constructor<any> = Constructor<any>> = {
 	useClass: H;
+} & BuildResolverOptions<any>;
+
+// ============================================================================
+// Handler Middleware Types
+// ============================================================================
+
+export interface ConstructorMiddleware<
+	C extends AnyMiddlewareContract = AnyMiddlewareContract,
+> {
+	readonly key: keyof C;
+	readonly contract: C;
+	new (...args: any[]): Middleware<C>;
+}
+
+export type ClassMiddleware<
+	M extends ConstructorMiddleware<any> = ConstructorMiddleware<any>,
+> = {
+	useClass: M;
 } & BuildResolverOptions<any>;
 
 // ============================================================================

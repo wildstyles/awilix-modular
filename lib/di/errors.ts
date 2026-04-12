@@ -91,16 +91,6 @@ export class HandlerMissingStaticKeyError extends Error {
 	}
 }
 
-export class HandlerMissingStaticContractError extends Error {
-	constructor(handlerName: string) {
-		super(
-			`Handler class "${handlerName}" must have a static "contract" property. ` +
-				`Example: static contract: Contract<typeof MyHandler.key, PayloadType, ResponseType>;`,
-		);
-		this.name = "HandlerMissingStaticContractError";
-	}
-}
-
 export class MediatorIsNotProvided extends Error {
 	constructor(handlerType: HandlerType) {
 		super(

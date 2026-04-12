@@ -1,6 +1,5 @@
 import * as Awilix from "awilix";
 import type { RouteRegistration } from "../http/openapi-builder.js";
-import type { CompleteMediatorBuilder } from "../mediator/mediator-builder.js";
 import { ControllerProcessor } from "./controller-processor.js";
 import * as ERRORS from "./errors.js";
 import { HandlerProcessor } from "./handler-processor.js";
@@ -11,8 +10,6 @@ import * as GUARGS from "./type-guards.js";
 
 export interface DiContextOptions {
 	framework: unknown;
-	queryMediatorBuilder?: CompleteMediatorBuilder;
-	commandMediatorBuilder?: CompleteMediatorBuilder;
 	beforeRouteRegistered?: (params: RouteRegistration) => any[];
 	containerOptions?: Awilix.ContainerOptions;
 	rootProviders?: Record<string, AnyProvider>;
@@ -59,8 +56,6 @@ export class DIContext {
 		);
 		this.handlerProcessor = new HandlerProcessor(
 			this.options.providerOptions || {},
-			this.options.queryMediatorBuilder,
-			this.options.commandMediatorBuilder,
 		);
 
 		this.rootContainer = Awilix.createContainer(this.options.containerOptions);

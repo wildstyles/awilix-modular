@@ -1,15 +1,10 @@
-import { DIContext, MediatorBuilder } from "awilix-modular";
+import { DIContext } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import { FastifyInstance } from "@/types.js";
 import { AppModule } from "@/modules/index.js";
 import { setupSwagger } from "./setup-swagger.js";
 import { RequestContext } from "./request-context.middleware.js";
-import {
-	authMiddleware,
-	loggingMiddleware,
-	tenantMiddleware,
-} from "./middlewares.js";
 
 async function bootstrap() {
 	const fastify = buildApp();
@@ -21,16 +16,6 @@ async function bootstrap() {
 		rootProviders: {
 			app: fastify,
 		},
-		queryMediatorBuilder: new MediatorBuilder()
-			.addMiddleware(loggingMiddleware)
-			.addMiddleware(authMiddleware)
-			.addMiddleware(tenantMiddleware)
-			.build(),
-		commandMediatorBuilder: new MediatorBuilder()
-			.addMiddleware(loggingMiddleware)
-			.addMiddleware(authMiddleware)
-			.addMiddleware(tenantMiddleware)
-			.build(),
 	});
 
 	try {
@@ -49,14 +34,5 @@ declare module "awilix-modular" {
 
 	interface CommonDependencies {
 		app: FastifyInstance;
-	}
-
-	// TODO: separate query from command
-	interface MiddlewareTagRegistry {
-		auth: { userId: string; roles: string[] };
-
-		logging: { requestId: string; timestamp: number };
-
-		tenant: { tenantId: string; tenantName: string };
 	}
 }

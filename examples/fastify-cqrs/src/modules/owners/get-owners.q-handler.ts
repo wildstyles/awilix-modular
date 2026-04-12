@@ -5,10 +5,10 @@ import type {
 } from "./get-owners.dto.js";
 
 export class GetOwnersQueryHandler
-	implements Handler<typeof GetOwnersQueryHandler.contract>
+	implements Handler<GetOwnersQueryHandler["contract"]>
 {
 	static readonly key = "owners/get-owners";
-	static contract: Contract<
+	declare readonly contract: Contract<
 		typeof GetOwnersQueryHandler.key,
 		Payload,
 		Response

@@ -1,4 +1,9 @@
-import { createStaticModule, type ModuleDef } from "awilix-modular";
+import {
+	createStaticModule,
+	type ModuleDef,
+	type QueryScenarioInput,
+	type QueryScenario,
+} from "awilix-modular";
 
 import { OwnersModule } from "@/modules/owners/owners.module.js";
 import { CatsController } from "./cats.controller.js";
@@ -9,6 +14,11 @@ import { DogsService } from "./dogs.service.js";
 import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
 import { GetCatsService } from "./get-cats.service.js";
 
+import { CatsAuthMiddleware } from "./cats-auth.middleware.js";
+import { CatsLoggingMiddleware } from "./cats-logging.middleware.js";
+
+import { TenantModule } from "../tenant/tenant.module.js";
+
 export type CatsModuleDef = ModuleDef<{
 	providers: {
 		catsService: CatsService;
@@ -16,16 +26,33 @@ export type CatsModuleDef = ModuleDef<{
 		getCatsService: GetCatsService;
 	};
 	exportKeys: "catsService";
-	imports: [typeof OwnersModule];
-	queryHandlers: [typeof GetCatsQueryHandler];
+	imports: [typeof OwnersModule, typeof TenantModule];
+	queryHandlers: [GetCatsQueryHandler];
+	queryPreHandlers: {
+		logging: CatsLoggingMiddleware;
+		auth: CatsAuthMiddleware;
+	};
 }>;
 
 export type Deps = CatsModuleDef["deps"];
+export type QueryContext = CatsModuleDef["queryContext"];
+
+export type QueryHandlerExecuteScenario<
+	TScenario extends QueryScenarioInput<CatsModuleDef>,
+> = QueryScenario<
+	CatsModuleDef,
+	TScenario
+>;
 
 export const CatsModule = createStaticModule<CatsModuleDef>({
 	name: "CatsModule",
 
-	imports: [OwnersModule],
+	imports: [OwnersModule, TenantModule],
+
+	queryPreHandlers: {
+		logging: CatsLoggingMiddleware,
+		auth: CatsAuthMiddleware,
+	},
 
 	providerOptions: {
 		// lifetime: "SCOPED",
@@ -38,7 +65,7 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 		},
 		dogsService: {
 			useClass: DogsService,
-			// lifetime: "TRANSIENT",
+			// lifetime: "TRANSIENT"ta
 		},
 		catsService: {
 			useClass: CatsService,
@@ -60,7 +87,8 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 		},
 	},
 
-	queryHandlers: [GetCatsQueryHandler],
+	// queryHandlers: [GetCatsQueryHandler],
+	queryHandlers: [{ useClass: GetCatsQueryHandler }],
 	controllers: [
 		CatsController,
 		CatsDecoratedController,

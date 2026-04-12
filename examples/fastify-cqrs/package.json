@@ -5,6 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx watch src/main.ts",
+		"typecheck:watch": "tsc --noEmit --watch",
+		"dev:strict": "concurrently -k -n app,types -c cyan,yellow \"pnpm dev\" \"pnpm typecheck:watch\"",
 		"start": "tsx src/main.ts"
 	},
 	"dependencies": {
@@ -14,10 +16,12 @@
 		"@sinclair/typebox": "^0.34.15",
 		"awilix": "^10.0.2",
 		"awilix-modular": "file:../..",
-		"fastify": "^5.2.0"
+		"fastify": "^5.2.0",
+		"typescript-result": "^3.5.2"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.2",
+		"concurrently": "^9.2.1",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2"
 	}

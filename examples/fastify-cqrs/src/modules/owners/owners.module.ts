@@ -19,7 +19,7 @@ export type OwnersModuleDef = ModuleDef<{
 	};
 	exportKeys: "ownersService" | "owners1Service";
 	imports: [ModuleRef<CatsModuleDef>];
-	queryHandlers: [typeof GetOwnersQueryHandler];
+	queryHandlers: [GetOwnersQueryHandler];
 }>;
 
 export type Deps = OwnersModuleDef["deps"];
