@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/wildstyles/awilix-modular/workflows/ci/badge.svg)](https://github.com/wildstyles/awilix-modular/actions)
 [![codecov](https://codecov.io/gh/wildstyles/awilix-modular/branch/main/graph/badge.svg)](https://codecov.io/gh/wildstyles/awilix-modular)
 
-A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture to any Node.js application.
+A type-safe, modular DI and CQRS library on top of [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture with powerful CQRS capabilities to any Node.js application.
 
 🚀 **includes native ES decorators (TC39 Stage 3) for routing - no `reflect-metadata` or `experimentalDecorators` required!**
 
@@ -23,11 +23,12 @@ A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix)
   - [Class Providers with DI Options](#class-providers-with-di-options)
   - [Configuring Provider Options](#configuring-provider-options)
   - [Scoped Controllers](#scoped-controllers)
+- [CQRS Pattern Support](#cqrs-pattern-support)
 - [Native ES Decorator-Based Routing](#native-es-decorator-based-routing)
 - [OpenAPI/Swagger Integration](#openapiswagger-integration)
 - [Type-Safe Request/Response](#type-safe-requestresponse)
+- [HTTP Exception Handling](#http-exception-handling)
 - [Dynamic Modules](#dynamic-modules)
-- [CQRS Pattern Support](#cqrs-pattern-support)
 - [Circular Dependencies](#circular-dependencies)
 - [Why awilix-modular?](#why-awilix-modular)
   - [The Problem](#the-problem)
@@ -38,6 +39,7 @@ A type-safe, modular DI library for [Awilix](https://github.com/jeffijoe/awilix)
 
 - **Type-Safe Module System** - Complete type safety for each provider in module
 - **HTTP Framework Agnostic** - Works with Express, Fastify, Hono, Koa, or any other framework
+- **Powerful CQRS** - Type-safe query/command handlers with middleware pipeline, per-module mediators, and contract-based execution
 - **NestJS-Inspired Architecture** - Familiar module/controller/provider patterns
 - **Less Import Boilerplate For Typing** - Define module dependencies once - reuse in all providers
 - **Lightweight** - Minimal overhead, built on proven Awilix foundation
@@ -131,6 +133,7 @@ import { UserModule } from "./user.module";
 
 type CommonDeps = {
   logger: Logger;
+  app: Express;
 };
 
 type AppModuleDef = ModuleDef<{
@@ -149,6 +152,7 @@ const app = express();
 DIContext.create(AppModule, {
   framework: app,
   rootProviders: {
+    app,
     logger: Logger,
   },
 });
@@ -165,7 +169,7 @@ declare module "awilix-modular" {
 ### 3. Type-safe dependency injection in services
 
 Use `ModuleDef['deps']` to get automatic type inference for all available dependencies in your service constructors.  
-This includes module providers, imported module exports, and common dependencies:
+This includes module providers, imported module exports, module mediator instance(if query/command handlers registered) and common dependencies:
 
 ```typescript
 // user.service.ts
@@ -186,7 +190,7 @@ class UserService {
 ### 4. Use controllers with any framework
 
 Route definition happens within `registerRoutes` controller method.
-It allows integration with **any HTTP framework** (Express, Fastify, Hono, Koa, etc.).  
+It allows integration with **any HTTP framework** you pass as global dependency (Express, Fastify, Hono, Koa, etc.).  
 This is especially useful for gradually migrating existing applications to a modular architecture without a full rewrite
 
 ```typescript
@@ -196,9 +200,12 @@ import { Controller } from "awilix-modular";
 import { UserModuleDeps } from "./user.module.ts";
 
 class UserController implements Controller {
-  constructor(private readonly userService: UserModuleDeps["userService"]) {}
-  // app is framework instance passed during DiContext initialization
-  registerRoutes(app: Express) {
+  constructor(
+    private readonly userService: UserModuleDeps["userService"],
+    // taken from global rootProviders
+    private readonly app: UserModuleDeps["app"],
+  ) {}
+  registerRoutes() {
     // Direct framework API - no abstraction layer
     app.get("/users/:id", async (req: Request, res: Response) => {
       const user = await this.userService.getUser(req.params.id);
@@ -419,17 +426,16 @@ export const OrderModule = createStaticModule<OrderModuleDef>({
 When using `SCOPED` lifetime for controllers with manual route registration, inject `resolveSelf` to get a fresh instance per request:
 
 ```typescript
-import type { FastifyInstance } from "fastify";
-
 export class UserController {
   private readonly instanceId = Math.random().toString(36).substring(7);
 
   constructor(
     private readonly userService: UserModuleDeps["userService"],
     private readonly resolveSelf: () => UserController, // Injected automatically
+    private readonly app: UserModuleDeps["app"],
   ) {}
 
-  registerRoutes(app: FastifyInstance) {
+  registerRoutes() {
     app.get("/users/:id", async (req, res) => {
       // Resolve request-scoped instance
       const controller = this.resolveSelf();
@@ -455,6 +461,370 @@ export const UserModule = createStaticModule<UserModuleDef>({
 
 > [!NOTE]
 > For decorator-based controllers, `resolveSelf` is not needed—scoped resolution happens automatically per request.
+
+## CQRS Pattern Support
+
+Awilix-modular encourages and provides utilities for implementing the CQRS (Command Query Responsibility Segregation) pattern with type-safe query and command handlers.
+
+### Why CQRS?
+
+CQRS isn't just an architectural pattern—it's a mindset that brings clarity to your application structure. With awilix-modular, CQRS costs almost nothing to implement but provides significant benefits:
+
+**Clear Mental Separation from Controllers**: Controllers become thin routing layers that delegate to handlers, keeping HTTP concerns separate from business logic:
+
+```typescript
+// Controller stays clean - just routes to handlers, or some http work
+app.get("/users/:id", async (req, res) => {
+  const result = await queryMediator.execute(
+    "users/get-user",
+    {
+      userId: req.params.id,
+    },
+    req.context,
+  );
+  res.json(result);
+});
+```
+
+**Strict Contract in One Place**: Each handler defines its contract (key, payload, response) in a single location, making it easy to understand what data flows through your system:
+
+```typescript
+export class GetUserQueryHandler {
+  static key = "users/get-user"; // Unique identifier
+  static contract: Contract<
+    typeof GetUserQueryHandler.key,
+    { userId: string }, // Input shape
+    User // Output shape
+  >;
+}
+```
+
+**Separation Between Reads and Writes**: Query handlers read data, command handlers modify it. This distinction makes code easier to reason about, test, and optimize:
+
+**Additional Benefits**:
+
+- **Testability**: Handlers are isolated units that can be tested without HTTP infrastructure
+- **Reusability**: Same handler works in controllers, cron jobs, message queues, or CLI commands
+- **Type Safety**: Full TypeScript support from payload to response, with autocomplete everywhere
+- **Middleware Pipeline**: Cross-cutting concerns (auth, logging, validation) apply consistently to all handlers
+- **Framework Agnostic**: Business logic isn't coupled to Express, Fastify, or any HTTP framework
+
+**Zero Cost**: Adding CQRS with awilix-modular requires minimal setup—just define handlers and register them. No complex configuration, no boilerplate, just clean separation of concerns.
+
+### Defining Query Handlers
+
+Create handlers that implement the `Handler<Contract>` interface with a unique key and executor function:
+
+```typescript
+import { type Contract, type Handler } from "awilix-modular";
+import type { UserModuleDeps } from "./user.module";
+
+// Define payload and response types
+type Payload = { userId: string };
+type Response = { id: string; role: "admin" | "user" };
+
+export class GetUserQueryHandler implements Handler<
+  typeof GetUserQueryHandler.contract
+> {
+  static key = "users/get-user";
+  static contract: Contract<typeof GetUserQueryHandler.key, Payload, Response>;
+
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+
+  async executor(payload: Payload): Promise<Response> {
+    return this.userService.findById(payload.userId);
+  }
+}
+```
+
+### Registering Handlers in Modules
+
+Add query handlers to the module's `queryHandlers` array. Include them in the `ModuleDef` type for full type safety:
+
+```typescript
+import { createStaticModule, type ModuleDef } from "awilix-modular";
+
+type UserModuleDef = ModuleDef<{
+  providers: {
+    userService: UserService;
+  };
+  queryHandlers: [typeof GetUserQueryHandler, typeof GetUserProfileHandler];
+}>;
+
+export type Deps = UserModuleDef["deps"];
+
+export const UserModule = createStaticModule<UserModuleDef>({
+  name: "UserModule",
+  providers: {
+    userService: UserService,
+  },
+  queryHandlers: [GetUserQueryHandler, GetUserProfileHandler],
+});
+```
+
+> [!IMPORTANT]
+> Adding `queryHandlers` to `ModuleDef` enables the per-module mediator to be fully type-safe. The mediator will know exactly which query keys are available and their payload/response types.
+
+### Initializing the Query Mediator
+
+Set up the `MediatorBuilder` during application bootstrap:
+
+```typescript
+import fastify from "fastify";
+import { DIContext, MediatorBuilder } from "awilix-modular";
+import { AppModule } from "./modules";
+
+const app = fastify();
+
+DIContext.create(AppModule, {
+  rootProviders: {
+    app,
+  },
+  framework: app,
+  queryMediatorBuilder: new MediatorBuilder().build(),
+});
+```
+
+### Executing Queries
+
+Execute queries from controllers using query mediator:
+
+```typescript
+class UserController {
+  constructor(
+    private readonly queryMediator: Deps["queryMediator"],
+    private readonly app: Deps["app"],
+  ) {}
+  registerRoutes() {
+    app.get("/users/:id", async (req, res) => {
+      // full typesafety from handler contract without depending on implementation!
+      const user = await app.queryMediator.execute("users/get-user", {
+        userId: req.params.id,
+      });
+      res.send(user);
+    });
+  }
+}
+```
+
+### Mediator Middlewares
+
+Mediator middlewares provide a powerful, type-safe way to intercept and process queries/commands before they reach handlers. This allows you to move cross-cutting concerns like **authentication, role checking...** from the HTTP framework layer to the application layer.
+
+#### Why Mediator Middlewares?
+
+Traditional approach couples business logic to the HTTP framework:
+
+```typescript
+// ❌ Framework-coupled approach
+app.get("/users/:id", authMiddleware, async (req, res) => {
+  if (!req.user.hasPermission("users:read")) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const user = await userService.getUser(req.params.id);
+  res.json(user);
+});
+```
+
+With mediator middlewares, application logic is **framework-agnostic** and happens in two layers:
+
+**1. Framework middleware extracts HTTP data:**
+
+```typescript
+// Extract HTTP-specific data (Fastify example)
+import type { FastifyRequest, FastifyReply } from "fastify";
+
+export interface RequestContext {
+  token?: string; // Authorization header
+  requestId: string; // Request ID
+  ip: string; // Client IP
+}
+
+async function extractRequestContext(
+  req: FastifyRequest,
+  _reply: FastifyReply,
+) {
+  // Extract only what's needed - no business logic here
+  req.context = {
+    token: req.headers.authorization,
+    requestId: req.id,
+    ip: req.ip,
+  };
+}
+
+// Register framework middleware
+app.addHook("onRequest", extractRequestContext);
+```
+
+**2. Mediator middlewares handle application logic:**
+
+```typescript
+// ✅ Framework-agnostic approach
+app.get("/users/:id", async (req, res) => {
+  // Pass execution context (immutable HTTP data) to mediator
+  const result = await queryMediator.execute(
+    "users/get-user",
+    { userId: req.params.id },
+    req.context, // executionContext from framework middleware
+  );
+
+  res.json(result);
+});
+```
+
+#### Creating Type-Safe Middlewares
+
+Mediator middlewares receive two important parameters:
+
+- **`executionContext`** - Immutable data from the HTTP layer (token, requestId, ip, etc.)
+- **`context`** - Mutable application context built by the middleware pipeline
+
+```typescript
+import type { MiddlewareConfig } from "awilix-modular";
+import { MediatorBuilder } from "awilix-modular";
+
+// 1. Auth middleware - reads from executionContext, writes to context
+export const authMiddleware: MiddlewareConfig<"auth"> = {
+  tag: "auth", // basically name of middleware
+  execute: async (payload, context, executionContext, next) => {
+    // Read from executionContext (immutable, from HTTP layer)
+    const token = executionContext.token;
+
+    // In real app: verify JWT token
+    // const user = await verifyJWT(token);
+    const user = {
+      userId: "user-123",
+      roles: ["admin", "user"],
+    };
+
+    // Write to context (mutable, built by middlewares)
+    return next(payload, {
+      ...context,
+      ...user, // Add userId and roles to context
+    });
+  },
+};
+
+// 2. Tenant middleware - DEPENDS on auth middleware
+export const tenantMiddleware: MiddlewareConfig<"tenant", "auth"> = {
+  tag: "tenant",
+  requires: "auth", // ✅ Type-safe dependency on auth middleware!
+  execute: async (payload, context, executionContext, next) => {
+    // context is now typed! It has userId and roles from auth middleware
+    console.log(
+      `[Tenant Middleware] User ${context.userId} with roles ${context.roles.join(", ")}`,
+    );
+
+    // In real app: extract tenant from subdomain or header
+    const tenant = {
+      tenantId: "tenant-456",
+      tenantName: "Acme Corp",
+    };
+
+    // ✅ next() now REQUIRES both auth context AND tenant context!
+    return next(payload, {
+      ...context, // auth properties: userId, roles
+      ...tenant, // tenant properties: tenantId, tenantName (REQUIRED!)
+    });
+  },
+};
+
+// 4. Build mediator with middlewares
+const queryMediatorBuilder = new MediatorBuilder()
+  .use(authMiddleware)
+  .use(tenantMiddleware) // Will run AFTER auth (dependency enforced)
+  .build();
+
+DIContext.create(AppModule, {
+  queryMediatorBuilder,
+});
+
+// 5. Augment types to make middleware context globally available
+declare module "awilix-modular" {
+  // Define what each middleware adds to context
+  interface MiddlewareTagRegistry {
+    auth: { userId: string; roles: string[] };
+    tenant: { tenantId: string; tenantName: string };
+  }
+
+  // Define execution context shape (from framework middleware)
+  interface ExecutionContext extends RequestContext {}
+}
+```
+
+> [!IMPORTANT]
+> **Type Augmentation**: Use `declare module "awilix-modular"` to define:
+>
+> - **`MiddlewareTagRegistry`** - Defines what each middleware adds to the context
+> - **`ExecutionContext`** - Defines the shape of immutable data from framework middleware
+>
+> This enables full TypeScript autocomplete and type checking in handlers!
+
+**Key Benefits:**
+
+- **Separation of Concerns**: Framework middleware extracts HTTP data; mediator middlewares handle application logic
+- **Type Safety**: Middleware dependencies are enforced at compile time and run time with `requires`
+- **Context Flow**: `executionContext` (immutable) → middleware pipeline → `context` (mutable) → handler
+- **Framework Agnostic**: Application logic isn't coupled to Express/Fastify/etc.
+
+#### Tagging Handlers
+
+Tag handlers to apply middlewares selectively using `middlewareTags` and `excludeMiddlewareTags`. Use the `ContextFromTags` utility to get proper type for context in handle executors:
+
+```typescript
+import {
+  type Handler,
+  type Contract,
+  type ContextFromTags,
+} from "awilix-modular";
+
+type Payload = { userId: string };
+type Response = User;
+
+export class GetUserQueryHandler implements Handler<
+  typeof GetUserQueryHandler.contract
+> {
+  static readonly key = "users/get-user";
+  static contract: Contract<typeof GetUserQueryHandler.key, Payload, Response>;
+
+  // Single source of truth - all middleware types are inferred from this
+  // by default oll middlewares are applied to handler
+  readonly middlewareTags = ["auth", "logging"] as const;
+  readonly excludeMiddlewareTags = [] as const;
+
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+
+  async executor(
+    payload: Payload,
+    // if no generic params passed ContextFromTags type includes all middleware params
+    context: ContextFromTags<
+      typeof this.middlewareTags,
+      typeof this.excludeMiddlewareTags
+    >,
+  ): Promise<Response> {
+    // context is fully typed! TypeScript knows it has:
+    // - userId, roles (from auth middleware)
+    // - requestId, timestamp (from logging middleware)
+    console.log(
+      `[Handler] User ${context.userId} is fetching user ${payload.userId}`,
+    );
+
+    return this.userService.getUser(payload.userId);
+  }
+}
+```
+
+> [!TIP]
+> **`ContextFromTags` utility**: Automatically infers the context type based on included and excluded middleware tags. This gives you full TypeScript autocomplete and type safety without manually defining context shapes!
+
+> [!NOTE]
+> **Understanding `executionContext` vs `context`:**
+>
+> - **`executionContext`**: Immutable data extracted from HTTP request (token, IP, headers, etc.). Created by framework middleware, never modified by mediator middlewares.
+> - **`context`**: Mutable application context built through the middleware pipeline. Each middleware reads the previous context and returns an enhanced version with additional data.
+>
+> This separation ensures HTTP concerns stay in the framework layer while application logic lives in mediator middlewares.
 
 ## Native ES Decorator-Based Routing
 
@@ -726,6 +1096,180 @@ export class UserController {
 > - [Express example](./examples/express-swagger/src/types.ts) - Type-safe Request/Response with schema validation
 > - [Fastify example](./examples/fastify-cqrs/src/types.ts) - Full TypeBox integration with Fastify type provider
 
+## HTTP Exception Handling
+
+Awilix-modular includes built-in HTTP exception utilities and encourages separation between application errors and HTTP responses.
+
+### Built-in HTTP Exceptions
+
+The library includes type-safe `HttpException` classes and factory helpers for standard HTTP errors:
+
+```typescript
+import { httpException, HttpException, HttpStatus } from "awilix-modular";
+
+// Using factory helpers with default messages
+throw httpException.notFound(); // "Not Found" with 404 status
+throw httpException.unauthorized(); // "Unauthorized" with 401 status
+throw httpException.badRequest(); // "Bad Request" with 400 status
+
+// With custom messages
+throw httpException.notFound("User not found");
+throw httpException.forbidden("Insufficient permissions");
+```
+
+**Available exception helpers:**
+
+- `badRequest(message?, response?)` - 400
+- `unauthorized(message?, response?)` - 401
+- `forbidden(message?, response?)` - 403
+- `notFound(message?, response?)` - 404
+- `conflict(message?, response?)` - 409
+- `unprocessableEntity(message?, response?)` - 422
+- `internalServerError(message?, response?)` - 500
+
+### Handling HTTP Exceptions in Controllers
+
+Use try/catch blocks to handle thrown exceptions:
+
+```typescript
+import { GET } from "awilix-modular";
+import { httpException } from "awilix-modular";
+import type { Request, Response } from "./types";
+
+export class UserController {
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+
+  @GET("/users/:id")
+  async getUser(req: Request, res: Response) {
+    try {
+      const user = await this.userService.getUser(req.params.id);
+      return res.json(user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        return res.status(error.getStatus()).json(error.getResponse());
+      }
+
+      // Handle unexpected errors
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  }
+}
+
+// In your service
+class UserService {
+  async getUser(id: string): Promise<User> {
+    const user = await this.deps.database.findUser(id);
+
+    if (!user) {
+      throw httpException.notFound(`User with id ${id} not found`);
+    }
+
+    return user;
+  }
+}
+```
+
+### Error-as-Value Pattern (Recommended for Application Logic)
+
+While HTTP exceptions work for simple cases, awilix-modular **encourages the error-as-value pattern in application logic** for better separation of concerns and type safety using libraries like [`typescript-result`](https://github.com/vultix/ts-results).
+
+#### Why Not Throw HTTP Errors in Application Logic?
+
+**Application and Infrastructure Separation**: Throwing HTTP exceptions couples your business logic to HTTP infrastructure. This creates problems when:
+
+- **Cron jobs** need to execute the same logic but have no HTTP context
+- **Message queues** process the same operations outside of HTTP requests
+- **Testing** requires mocking HTTP-specific error handling
+- **Reusability** - business logic should work in any context (HTTP, CLI, background jobs, etc.)
+
+```typescript
+// ❌ BAD: Business logic coupled to HTTP
+class UserService {
+  async createUser(data: CreateUserDto) {
+    if (!data.email) {
+      throw httpException.badRequest("Email is required"); // HTTP error in business logic!
+    }
+    // This service can't be used in cron jobs or queues without HTTP semantics
+  }
+}
+
+// ✅ GOOD: Business logic returns domain errors
+class UserService {
+  async createUser(
+    data: CreateUserDto,
+  ): Promise<Result<User, ValidationError>> {
+    if (!data.email) {
+      return Err(new ValidationError({ email: ["Email is required"] }));
+    }
+    // This service works everywhere - HTTP, cron, queue, CLI
+  }
+}
+```
+
+**Additional Benefits of Error-as-Value**:
+
+- **Explicit error handling** - Errors are declared in the function signature
+- **Type safety** - TypeScript tracks which errors a function can return
+- **Better composition** - Errors can be mapped, chained, and transformed without try/catch blocks
+
+The error-as-value pattern makes errors explicit and type-safe:
+
+```typescript
+import { Result, Ok, Err } from "typescript-result";
+import type { UserModuleDeps } from "./user.module";
+
+class UserService {
+  constructor(private readonly deps: UserModuleDeps) {}
+
+  async getUser(id: string): Promise<Result<User, UserNotFoundError>> {
+    const user = await this.deps.database.findUser(id);
+
+    if (!user) {
+      return Err(new UserNotFoundError(id));
+    }
+
+    return Ok(user);
+  }
+}
+```
+
+#### Handling Error-as-Value in Controllers
+
+Controllers translate application errors (Result types) into HTTP responses using `httpException`:
+
+```typescript
+import { GET, PUT, schema, httpException } from "awilix-modular";
+import type { Request, Response } from "./types";
+
+export class UserController {
+  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+
+  @GET("/users/:id")
+  async getUser(req: Request, res: Response) {
+    const result = await this.userService.getUser(req.params.id);
+
+    if (result.ok) {
+      return res.json(result.val);
+    }
+
+    // Map application errors to HTTP errors at the boundary
+    const error = result.error;
+
+    if (error instanceof UserNotFoundError) {
+      const httpError = httpException.notFound(error.message);
+      return res.status(httpError.statusCode).json(httpError.getResponse());
+    }
+
+    if (error instanceof ValidationError) {
+      const httpError = httpException.badRequest("Validation failed", {
+        errors: error.details,
+      });
+      return res.status(httpError.statusCode).json(httpError.getResponse());
+    }
+  }
+}
+```
+
 ## Dynamic Modules
 
 Dynamic modules accept configuration at runtime using the `forRoot` pattern, allowing you to configure the same module differently in different contexts:
@@ -783,111 +1327,6 @@ export const AppModule = createStaticModule<AppModuleDef>({
   ],
 });
 ```
-
-## CQRS Pattern Support
-
-Awilix-modular encourages and provides utilities for implementing the CQRS (Command Query Responsibility Segregation) pattern with type-safe query and command handlers.
-
-### Defining Query Handlers
-
-Create handlers that implement the `Handler<Contract>` interface with a unique key and executor function:
-
-```typescript
-import { type Contract, type Handler } from "awilix-modular";
-import type { UserModuleDeps } from "./user.module";
-
-// Define payload and response types
-type Payload = { userId: string };
-type Response = { id: string; role: "admin" | "user" };
-
-export const GET_USER_QUERY = "users/get-user";
-
-export class GetUserQueryHandler implements Handler<
-  typeof GetUserQueryHandler.contract
-> {
-  readonly key = GET_USER_QUERY;
-  static contract: Contract<typeof GET_USER_QUERY, Payload, Response>;
-
-  constructor(private readonly userService: UserModuleDeps["userService"]) {}
-
-  async executor(payload: Payload): Promise<Response> {
-    return this.userService.findById(payload.userId);
-  }
-}
-```
-
-### Registering Handlers in Modules
-
-Add query handlers to the module's `queryHandlers` array and export their contracts:
-
-```typescript
-// Export module's query contracts (use union for multiple handlers)
-export type UserModuleQueryContracts =
-  | typeof GetUserQueryHandler.contract
-  | typeof GetUserProfileHandler.contract;
-
-export const UserModule = createStaticModule<UserModuleDef>({
-  name: "UserModule",
-  providers: {
-    userService: UserService,
-  },
-  queryHandlers: [GetUserQueryHandler, GetUserProfileHandler],
-});
-```
-
-### Initializing the Query Mediator
-
-Set up the query mediator during application bootstrap and register handlers using the `onQueryHandler` hook:
-
-```typescript
-import { type Mediator, DIContext, initializeMediator } from "awilix-modular";
-import { AppModule, type QueryContracts } from "./modules";
-import fastify from "fastify";
-
-const app = fastify();
-const queryMediator = initializeMediator<QueryContracts>();
-
-// Decorate Fastify instance with query mediator to access mediator through app in controllers
-app.decorate("queryMediator", queryMediator);
-
-DIContext.create(AppModule, {
-  framework: app,
-  onQueryHandler: (resolveHandler) => {
-    const { key } = resolveHandler();
-    app.queryMediator.register(key, (...args) => resolveHandler().executor(...args));
-  },
-});
-
-// Type augmentation for TypeScript
-declare module "fastify" {
-  interface FastifyInstance {
-    queryMediator: Mediator<QueryContracts>;
-  }
-}
-```
-
-### Executing Queries
-
-Execute queries from controllers using the type-safe query mediator:
-
-```typescript
-import type { FastifyInstance } from "fastify";
-
-class UserController {
-  registerRoutes(app: FastifyInstance) {
-    app.get("/users/:id", async (req, res) => {
-      // full typesafety without depending on implementation
-      const user = await app.queryMediator.execute("users/get-user", {
-        userId: req.params.id,
-      });
-      res.send(user);
-    });
-  }
-}
-```
-
-> [!TIP]
-> The same pattern applies to command handlers using `commandHandlers` and `onCommandHandler`. See the [fastify-cqrs example](./examples/fastify-cqrs) for a complete implementation.
 
 ## Circular Dependencies
 
@@ -1125,4 +1564,8 @@ class UserService {
 
 **Less Boilerplate**: Define dependencies once in your module, not repeatedly in every constructor. No reflection, no repeated type declarations.
 
-**Future-Proof**: Built on native ES Stage 3 decorators and standard JavaScript. no experimental features or polyfills required.
+**Mediator as a Gateway**: The mediator pattern provides a clean abstraction between HTTP infrastructure and application logic. Controllers don't call services directly—they execute contracts through the mediator. This indirection enables powerful middleware pipelines (auth, logging, validation) to run consistently for all operations without coupling them to the HTTP layer.
+
+**Contracts Over Implementation**: Handlers expose contracts (key + payload + response), not implementation details. Controllers and other consumers depend on these contracts, not concrete classes. This makes refactoring easier—you can change handler internals without touching consumers, as long as the contract remains stable.
+
+**Future-Proof**: Built on native ES Stage 3 decorators and standard JavaScript. No experimental features or polyfills required.
