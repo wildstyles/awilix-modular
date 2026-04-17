@@ -13,6 +13,7 @@ export class HandlerAlreadyRegisteredError extends Error {
 	}
 }
 
+// TODO: add requires for midleware
 export class MiddlewareDependencyNotSatisfiedError extends Error {
 	constructor(handlerKey: string, middlewareTag: string, requiredTag: string) {
 		super(
@@ -49,5 +50,25 @@ export class HandlerNotRegisteredError extends Error {
 			`Handler key of ${handlerKey} is not registered in module: "${moduleName}"`,
 		);
 		this.name = "HandlerNotRegisteredError";
+	}
+}
+
+export class InvalidMiddlewareReturnValueError extends Error {
+	constructor(middlewareKey: string, returnedType: string) {
+		super(
+			`Middleware "${middlewareKey}" returned invalid value of type "${returnedType}". ` +
+				`Middlewares must return a Result type or a plain object for context merging.`,
+		);
+		this.name = "InvalidMiddlewareReturnValueError";
+	}
+}
+
+export class ContextKeyConflictError extends Error {
+	constructor(middlewareKey: string, conflictingKeys: string[]) {
+		super(
+			`Middleware "${middlewareKey}" tried to add context keys that already exist: ${conflictingKeys.join(", ")}. ` +
+				`Each middleware must add unique keys to the context.`,
+		);
+		this.name = "ContextKeyConflictError";
 	}
 }

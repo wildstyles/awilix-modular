@@ -39,10 +39,7 @@ export type QueryContext = CatsModuleDef["queryContext"];
 
 export type QueryHandlerExecuteScenario<
 	TScenario extends QueryScenarioInput<CatsModuleDef>,
-> = QueryScenario<
-	CatsModuleDef,
-	TScenario
->;
+> = QueryScenario<CatsModuleDef, TScenario>;
 
 export const CatsModule = createStaticModule<CatsModuleDef>({
 	name: "CatsModule",
@@ -50,7 +47,8 @@ export const CatsModule = createStaticModule<CatsModuleDef>({
 	imports: [OwnersModule, TenantModule],
 
 	queryPreHandlers: {
-		logging: CatsLoggingMiddleware,
+		logging: { useClass: CatsLoggingMiddleware },
+		// logging: CatsLoggingMiddleware,
 		auth: CatsAuthMiddleware,
 	},
 

@@ -2,9 +2,12 @@ import * as Awilix from "awilix";
 import type { RouteRegistration } from "../http/openapi-builder.js";
 import { ControllerProcessor } from "./controller-processor.js";
 import * as ERRORS from "./errors.js";
-import { HandlerProcessor } from "./handler-processor.js";
+import {
+	HandlerProcessor,
+	type MiddlewareResolverMap,
+} from "./handler-processor.js";
 import type { AnyModule as M } from "./module.types.js";
-import type { AnyProvider } from "./provider.types.js";
+import type { AnyMiddleware, AnyProvider } from "./provider.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
 import * as GUARGS from "./type-guards.js";
 
@@ -181,8 +184,32 @@ export class DIContext {
 			},
 		);
 
-		this.handlerProcessor.processHandlers(m, scope, "query");
-		this.handlerProcessor.processHandlers(m, scope, "command");
+		// Register and resolve middlewares
+		const queryMiddlewareResolvers = this.registerAndBuildMiddlewareResolvers(
+			m,
+			scope,
+			importedModulesWithScope,
+			"query",
+		);
+		const commandMiddlewareResolvers = this.registerAndBuildMiddlewareResolvers(
+			m,
+			scope,
+			importedModulesWithScope,
+			"command",
+		);
+
+		this.handlerProcessor.processHandlers(
+			m,
+			scope,
+			"query",
+			queryMiddlewareResolvers,
+		);
+		this.handlerProcessor.processHandlers(
+			m,
+			scope,
+			"command",
+			commandMiddlewareResolvers,
+		);
 		this.controllerProcessor.processControllers(m, scope);
 
 		return {
@@ -192,13 +219,83 @@ export class DIContext {
 		};
 	}
 
+	private registerAndBuildMiddlewareResolvers(
+		m: M,
+		scope: Awilix.AwilixContainer,
+		importedModulesWithScope: (ModuleScopeTree & { module: M })[],
+		handlerType: "query" | "command",
+	): MiddlewareResolverMap {
+		const keyMap = {
+			query: {
+				preHandlersKey: "queryPreHandlers" as const,
+				preHandlerExportsKey: "queryPreHandlerExports" as const,
+			},
+			command: {
+				preHandlersKey: "commandPreHandlers" as const,
+				preHandlerExportsKey: "commandPreHandlerExports" as const,
+			},
+		};
+
+		const { preHandlersKey, preHandlerExportsKey } = keyMap[handlerType];
+		const resolverMap: MiddlewareResolverMap = new Map();
+
+		for (const [key, middleware] of Object.entries(m[preHandlersKey] ?? {})) {
+			const symbol = Symbol(`prehandler_${m.name}_${key}`);
+
+			scope.register({
+				[symbol]: this.resolveProvider({
+					provider: middleware,
+					resolutionScope: scope,
+					module: m,
+				}),
+			});
+
+			resolverMap.set(key, () => scope.resolve(symbol));
+		}
+
+		for (const {
+			module: importedModule,
+			scope: importedScope,
+		} of importedModulesWithScope) {
+			for (const [key, middleware] of Object.entries(
+				importedModule[preHandlerExportsKey] ?? {},
+			)) {
+				if (resolverMap.has(key)) {
+					throw new ERRORS.MiddlewareNameConflictError(
+						m.name,
+						key,
+						importedModule.name,
+						handlerType,
+					);
+				}
+
+				const symbol = Symbol(
+					`prehandler_export_${importedModule.name}_${key}`,
+				);
+
+				scope.register({
+					[symbol]: this.resolveProvider({
+						provider: middleware,
+						resolutionScope: importedScope,
+						module: importedModule,
+						wrapForExport: true,
+					}),
+				});
+
+				resolverMap.set(key, () => scope.resolve(symbol));
+			}
+		}
+
+		return resolverMap;
+	}
+
 	private resolveProvider({
 		provider,
 		resolutionScope,
 		module,
 		wrapForExport,
 	}: {
-		provider: AnyProvider;
+		provider: AnyProvider | AnyMiddleware;
 		resolutionScope: Awilix.AwilixContainer;
 		module: M;
 		wrapForExport?: boolean;
@@ -267,7 +364,7 @@ export class DIContext {
 
 	private extractResolverOptions(
 		module: M,
-		provider: AnyProvider,
+		provider: AnyProvider | AnyMiddleware,
 	): Awilix.BuildResolverOptions<any> {
 		const baseOptions = {
 			...this.options.providerOptions,

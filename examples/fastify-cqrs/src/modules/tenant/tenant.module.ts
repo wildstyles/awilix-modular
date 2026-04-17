@@ -16,7 +16,8 @@ export const TenantModule = createStaticModule<TenantModuleDef>({
 	},
 
 	queryPreHandlerExports: {
-		tenant: TenantMiddleware,
+		tenant: { useClass: TenantMiddleware },
+		// tenant: TenantMiddleware,
 	},
 });
 

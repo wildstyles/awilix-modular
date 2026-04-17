@@ -14,10 +14,11 @@ import type {
 	ExtractCommandMediator,
 	ExtractQueryMediator,
 } from "./extract-mediator.types.js";
+
 export type {
 	CommandScenario,
-	QueryScenarioInput,
 	QueryScenario,
+	QueryScenarioInput,
 } from "./handler-scenario.types.js";
 
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging

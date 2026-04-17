@@ -26,7 +26,7 @@ export class TenantMiddleware implements Middleware {
 		// Simulate tenant lookup from context or executionContext
 		const userId = (context as any).userId || "unknown";
 
-		console.log(`[Tenant Middleware] Looking up tenant for user ${userId}`);
+		console.log("--------TENANT--------------");
 
 		// Simulate tenant not found scenario
 		if (userId === "user-without-tenant") {

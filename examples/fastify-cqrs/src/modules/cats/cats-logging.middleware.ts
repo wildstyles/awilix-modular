@@ -23,9 +23,11 @@ export class CatsLoggingMiddleware implements Middleware {
 		// Read from executionContext (immutable, from HTTP layer)
 		const token = executionContext.token;
 
-		if (!token || token === "invalid") {
-			return Result.error(new LoggerError());
-		}
+		console.log("--------------LOGGING--------------------");
+
+		// if (!token || token === "invalid") {
+		// 	return Result.error(new LoggerError());
+		// }
 
 		// Return success
 		return Result.ok({ loggerId: "LoggerId" });

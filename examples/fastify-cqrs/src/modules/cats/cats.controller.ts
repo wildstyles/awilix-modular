@@ -24,11 +24,12 @@ export class CatsController implements Controller {
 						...req.params,
 						...req.query,
 					},
-					req.context, // Extracted by framework-level middleware
 					{
+						executionContext: req.context,
 						scenario: "public",
+						// scenario: "authorized",
 						// includePreHandlers: ["logging", "auth", "tenant"],
-						excludePreHandlers: ["auth"],
+						excludePreHandlers: ["auth", "tenant", "logging"],
 					},
 				);
 

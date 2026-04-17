@@ -7,12 +7,8 @@ import type {
 export class GetOwnersQueryHandler
 	implements Handler<GetOwnersQueryHandler["contract"]>
 {
-	static readonly key = "owners/get-owners";
-	declare readonly contract: Contract<
-		typeof GetOwnersQueryHandler.key,
-		Payload,
-		Response
-	>;
+	readonly key = "owners/get-owners";
+	declare readonly contract: Contract<typeof this.key, Payload, Response>;
 
 	private readonly instanceId = Math.random().toString(36).substring(7);
 

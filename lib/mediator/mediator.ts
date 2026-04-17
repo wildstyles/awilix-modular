@@ -1,317 +1,216 @@
+import { Result, type Result as ResultType } from "../result/result.js";
 import * as errors from "./errors.js";
+import type { AnyContract, Executor, ExtractPayload } from "./handler.types.js";
 import type {
-	AnyContract,
-	Executor,
-	ExtractPayload,
-	ExtractResponse,
-} from "./handler.types.js";
-import type { Result } from "../result/result.js";
-import type {
-	AnyContext,
-	ExecutionContext,
-	MiddlewareTagRegistry,
-} from "./middleware.types.js";
-
-type HandlerMiddlewareOptions = {
-	middlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
-	excludeMiddlewareTags?: readonly (keyof MiddlewareTagRegistry)[];
-};
-
-export type ExecutePreHandlerOptions<
-	TPreHandlerKey extends string = never,
-> = {
-	scenario?: never;
-	includePreHandlers?: readonly TPreHandlerKey[];
-	excludePreHandlers?: readonly TPreHandlerKey[];
-	// Backward-compatible typo alias
-	inclulePreHandlers?: readonly TPreHandlerKey[];
-};
-
-type ExtractExecuteScenarios<
-	C extends AnyContract,
-	K extends keyof C,
-> = C[K] extends { executeScenarios: infer S } ? S : never;
-
-type ExtractExecuteScenarioByName<
-	C extends AnyContract,
-	K extends keyof C,
-	Name extends string,
-> = Extract<ExtractExecuteScenarios<C, K>, { name: Name }>;
-
-type ExtractScenarioName<C extends AnyContract, K extends keyof C> =
-	ExtractExecuteScenarios<C, K> extends { name: infer Name extends string }
-		? Name
-		: never;
-
-type ScenarioIncludePreHandlersExact<
-	C extends AnyContract,
-	K extends keyof C,
-	Name extends string,
-> =
-	ExtractExecuteScenarioByName<C, K, Name> extends {
-		includePreHandlers: infer Include extends readonly any[];
-	}
-		? Include
-		: never;
-
-type ScenarioExcludePreHandlersExact<
-	C extends AnyContract,
-	K extends keyof C,
-	Name extends string,
-> =
-	ExtractExecuteScenarioByName<C, K, Name> extends {
-		excludePreHandlers: infer Exclude extends readonly any[];
-	}
-		? Exclude
-		: never;
-
-type ScenarioIncludeOption<
-	C extends AnyContract,
-	K extends keyof C,
-	Name extends string,
-> = [ScenarioIncludePreHandlersExact<C, K, Name>] extends [never]
-	? {
-			includePreHandlers?: never;
-			inclulePreHandlers?: never;
-		}
-	: {
-			includePreHandlers: ScenarioIncludePreHandlersExact<C, K, Name>;
-			inclulePreHandlers?: never;
-		};
-
-type ScenarioExcludeOption<
-	C extends AnyContract,
-	K extends keyof C,
-	Name extends string,
-> = [ScenarioExcludePreHandlersExact<C, K, Name>] extends [never]
-	? { excludePreHandlers?: never }
-	: {
-			excludePreHandlers: ScenarioExcludePreHandlersExact<C, K, Name>;
-		};
-
-type ExecutePreHandlerScenarioOptions<
-	C extends AnyContract,
-	K extends keyof C,
-	TPreHandlerKey extends string,
-> = {
-	[Name in ExtractScenarioName<C, K>]: {
-		scenario: Name;
-	} & ScenarioIncludeOption<C, K, Name> &
-		ScenarioExcludeOption<C, K, Name>;
-}[ExtractScenarioName<C, K>];
-
-type ExecuteOptions<
-	C extends AnyContract,
-	K extends keyof C,
-	TPreHandlerKey extends string,
-> = [ExtractExecuteScenarios<C, K>] extends [never]
-	? ExecutePreHandlerOptions<TPreHandlerKey>
-	: ExecutePreHandlerScenarioOptions<C, K, TPreHandlerKey>;
-
-type ExecuteArgs<
-	C extends AnyContract,
-	K extends keyof C,
-	TPreHandlerKey extends string,
-> = [ExtractExecuteScenarios<C, K>] extends [never]
-	? keyof ExecutionContext extends never
-		? [
-				executionContext?: AnyContext,
-				preHandlerOptions?: ExecuteOptions<C, K, TPreHandlerKey>,
-			]
-		: [
-				executionContext: ExecutionContext,
-				preHandlerOptions?: ExecuteOptions<C, K, TPreHandlerKey>,
-			]
-	: keyof ExecutionContext extends never
-		? [
-				executionContext: AnyContext,
-				preHandlerOptions: ExecuteOptions<C, K, TPreHandlerKey>,
-			]
-		: [
-				executionContext: ExecutionContext,
-				preHandlerOptions: ExecuteOptions<C, K, TPreHandlerKey>,
-			];
-
-type ExtractPreHandlerErrorsMap<
-	C extends AnyContract,
-	K extends keyof C,
-	TPreHandlerErrorMap extends Record<string, unknown>,
-> = C[K] extends { preHandlerErrors: infer M extends Record<string, unknown> }
-	? M
-	: TPreHandlerErrorMap;
-
-type ExtractOptionsFromExecuteArgs<TArgs extends readonly unknown[]> =
-	TArgs extends [any, infer TOptions] ? TOptions : never;
-
-type ExtractIncludedPreHandlerKeys<
-	TPreHandlerKey extends string,
-	TOptions,
-> = TOptions extends { includePreHandlers: infer Include extends readonly any[] }
-	? Extract<Include[number], TPreHandlerKey>
-	: TOptions extends {
-				inclulePreHandlers: infer IncludeAlias extends readonly any[];
-		  }
-		? Extract<IncludeAlias[number], TPreHandlerKey>
-		: TPreHandlerKey;
-
-type ExtractExcludedPreHandlerKeys<
-	TPreHandlerKey extends string,
-	TOptions,
-> = TOptions extends { excludePreHandlers: infer Exclude extends readonly any[] }
-	? Extract<Exclude[number], TPreHandlerKey>
-	: never;
-
-type ExtractSelectedPreHandlerKeys<
-	TPreHandlerKey extends string,
-	TOptions,
-> = Exclude<
-	ExtractIncludedPreHandlerKeys<TPreHandlerKey, TOptions>,
-	ExtractExcludedPreHandlerKeys<TPreHandlerKey, TOptions>
->;
-
-type ExtractSelectedPreHandlerErrors<
-	TPreHandlerErrorMap extends Record<string, unknown>,
-	TPreHandlerKey extends string,
-	TOptions,
-> = Extract<keyof TPreHandlerErrorMap, ExtractSelectedPreHandlerKeys<
-	TPreHandlerKey,
-	TOptions
->> extends infer TKey extends string
-	? [TKey] extends [never]
-		? never
-		: {
-				[K in TKey]: TPreHandlerErrorMap[K];
-			}[TKey]
-	: never;
-
-type MergeResponseWithPreHandlerErrors<TResponse, TPreHandlerError> = [
-	TPreHandlerError,
-] extends [never]
-	? TResponse
-	: [TResponse] extends [{ readonly ok: true; readonly value: infer V }]
-		? Result<V, TPreHandlerError>
-		: [TResponse] extends [{ readonly ok: false; readonly error: infer E }]
-			? Result<never, E | TPreHandlerError>
-			: [TResponse] extends [
-						| { readonly ok: true; readonly value: infer V }
-						| { readonly ok: false; readonly error: infer E },
-					]
-				? Result<V, E | TPreHandlerError>
-				: Result<TResponse, TPreHandlerError>;
-
-type ExecuteResponseByOptions<
-	C extends AnyContract,
-	K extends keyof C,
-	TPreHandlerKey extends string,
-	TPreHandlerErrorMap extends Record<string, unknown>,
-	TOptions,
-> = MergeResponseWithPreHandlerErrors<
-	ExtractResponse<C, K>,
-	ExtractSelectedPreHandlerErrors<
-		ExtractPreHandlerErrorsMap<C, K, TPreHandlerErrorMap>,
-		TPreHandlerKey,
-		TOptions
-	>
->;
-
-interface HandlerRegistration extends HandlerMiddlewareOptions {
-	executor: Executor;
-}
+	ExecutePreHandlerOptions,
+	ExecuteResponse,
+	ExecuteRuntimeOptions,
+	MiddlewareResolver,
+	MiddlewareResolverMap,
+} from "./mediator.types.js";
+import type { AnyContext, ExecutionContext } from "./middleware.types.js";
 
 export class Mediator<
 	C extends AnyContract,
 	TPreHandlerKey extends string = never,
 	TPreHandlerErrorMap extends Record<string, unknown> = Record<never, never>,
 > {
-	private handlers = new Map<string, HandlerRegistration>();
-	private middlewares: any[];
+	private handlers = new Map<string, Executor>();
+	private middlewareResolvers: MiddlewareResolverMap;
 	private moduleName: string;
 
-	constructor(middlewares: any[], moduleName: string) {
+	constructor(middlewareResolvers: MiddlewareResolverMap, moduleName: string) {
 		this.moduleName = moduleName;
-		this.middlewares = middlewares;
+		this.middlewareResolvers = middlewareResolvers;
 	}
 
-	register(
-		key: string,
-		executor: Executor,
-		options?: HandlerMiddlewareOptions,
-	): void {
+	register(key: string, executor: Executor): void {
 		const keyStr = String(key);
 
 		if (this.handlers.has(keyStr)) {
 			throw new errors.HandlerAlreadyRegisteredError(keyStr);
 		}
 
-		this.handlers.set(keyStr, {
-			executor,
-			...options,
-		});
+		this.handlers.set(keyStr, executor);
 	}
 
 	async execute<
 		K extends keyof C,
-		TArgs extends ExecuteArgs<C, K, TPreHandlerKey>,
+		TOptions extends ExecuteRuntimeOptions<
+			C,
+			K,
+			TPreHandlerKey
+		> = ExecuteRuntimeOptions<C, K, TPreHandlerKey>,
 	>(
 		key: K,
 		payload: ExtractPayload<C, K>,
-		...args: TArgs
+		options?: TOptions,
 	): Promise<
-		ExecuteResponseByOptions<
+		ExecuteResponse<C, K, TPreHandlerKey, TPreHandlerErrorMap, TOptions>
+	> {
+		type Response = ExecuteResponse<
 			C,
 			K,
 			TPreHandlerKey,
 			TPreHandlerErrorMap,
-			ExtractOptionsFromExecuteArgs<TArgs>
-		>
-	> {
-		const executionContext = args[0] ?? {};
-		const keyStr = String(key);
-		const handlerReg = this.handlers.get(keyStr);
+			TOptions
+		>;
 
-		if (!handlerReg) {
+		const keyStr = String(key);
+		const executor = this.handlers.get(keyStr);
+
+		if (!executor) {
 			throw new errors.HandlerNotRegisteredError(keyStr, this.moduleName);
 		}
 
-		const applicableMiddlewares: any[] = [];
+		const { executionContext, includePreHandlers, excludePreHandlers } =
+			options ?? {};
 
-		// Accumulate context by executing middlewares in order
+		const applicableMiddlewares = this.filterMiddlewareResolvers({
+			excludePreHandlers,
+			includePreHandlers,
+		});
+
+		const middlewareResult = await this.executeMiddlewares(
+			applicableMiddlewares,
+			payload,
+			executionContext ?? {},
+		);
+
+		if (middlewareResult.type === "error") {
+			return middlewareResult.error as Response;
+		}
+
+		const handlerResult = await executor(payload, middlewareResult.context);
+
+		if (middlewareResult.hasResultMiddleware) {
+			return (
+				this.isResult(handlerResult) ? handlerResult : Result.ok(handlerResult)
+			) as Response;
+		}
+
+		return handlerResult as Response;
+	}
+
+	private async executeMiddlewares(
+		middlewares: Array<[string, MiddlewareResolver]>,
+		payload: unknown,
+		executionContext: ExecutionContext,
+	): Promise<
+		| { type: "success"; context: AnyContext; hasResultMiddleware: boolean }
+		| { type: "error"; error: ResultType<never, unknown> }
+	> {
 		let context: AnyContext = {};
+		let hasResultMiddleware = false;
 
-		for (const middleware of applicableMiddlewares) {
-			const result: unknown = await middleware.execute(
+		for (const [middlewareKey, resolver] of middlewares) {
+			const result = await resolver().execute(
 				payload,
 				context,
 				executionContext,
 			);
 
-			// Check if result is an error Result (has ok: false)
-			if (
-				typeof result === "object" &&
-				result !== null &&
-				"ok" in result &&
-				typeof (result as any).ok === "boolean"
-			) {
-				if ((result as any).ok === false) {
-					// Middleware returned error - short circuit and return
-					return result as any;
-				}
-				// Middleware returned success Result - extract value and merge
-				const value = (result as any).value;
-				if (typeof value === "object" && value !== null) {
-					context = { ...context, ...value };
-				}
-			} else if (typeof result === "object" && result !== null) {
-				// Middleware returned plain data - merge directly
-				context = { ...context, ...(result as AnyContext) };
+			if (this.isResult(result)) {
+				hasResultMiddleware = true;
 			}
+
+			const processed = this.processMiddlewareResult(
+				result,
+				context,
+				middlewareKey,
+			);
+
+			if (processed.shouldShortCircuit) {
+				return { type: "error", error: processed.result };
+			}
+
+			context = processed.context;
 		}
 
-		// All middlewares succeeded - execute handler
-		return handlerReg.executor(payload, context) as any;
+		return { type: "success", context, hasResultMiddleware };
 	}
 
-	unregister<K extends keyof C>(key: K): void {
-		this.handlers.delete(String(key));
+	private processMiddlewareResult(
+		result: unknown,
+		currentContext: AnyContext,
+		middlewareKey: string,
+	):
+		| { shouldShortCircuit: true; result: ResultType<never, unknown> }
+		| { shouldShortCircuit: false; context: AnyContext } {
+		if (this.isResult(result)) {
+			return result.ok
+				? {
+						shouldShortCircuit: false,
+						context: this.mergeContext(
+							currentContext,
+							result.value,
+							middlewareKey,
+						),
+					}
+				: { shouldShortCircuit: true, result };
+		}
+
+		return {
+			shouldShortCircuit: false,
+			context: this.mergeContext(currentContext, result, middlewareKey),
+		};
+	}
+
+	private filterMiddlewareResolvers(
+		options?: ExecutePreHandlerOptions,
+	): Array<[string, MiddlewareResolver]> {
+		const { includePreHandlers = [], excludePreHandlers = [] } = options ?? {};
+
+		return Array.from(this.middlewareResolvers.entries()).filter(([key]) => {
+			if (excludePreHandlers.includes(key)) {
+				return false;
+			}
+
+			if (includePreHandlers.length > 0) {
+				return includePreHandlers.includes(key);
+			}
+
+			return true;
+		});
+	}
+
+	private mergeContext(
+		currentContext: AnyContext,
+		data: unknown,
+		middlewareKey: string,
+	): AnyContext {
+		if (data === undefined) {
+			return currentContext;
+		}
+
+		if (typeof data !== "object" || data === null) {
+			const returnedType = data === null ? "null" : typeof data;
+			throw new errors.InvalidMiddlewareReturnValueError(
+				middlewareKey,
+				returnedType,
+			);
+		}
+
+		// Check for key conflicts
+		const currentKeys = Object.keys(currentContext);
+		const newKeys = Object.keys(data);
+		const conflictingKeys = newKeys.filter((key) =>
+			currentKeys.includes(key),
+		);
+
+		if (conflictingKeys.length > 0) {
+			throw new errors.ContextKeyConflictError(middlewareKey, conflictingKeys);
+		}
+
+		return { ...currentContext, ...data };
+	}
+
+	private isResult(value: unknown): value is ResultType<unknown, unknown> {
+		return (
+			typeof value === "object" &&
+			value !== null &&
+			"ok" in value &&
+			typeof value.ok === "boolean"
+		);
 	}
 }

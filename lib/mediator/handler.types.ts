@@ -40,6 +40,7 @@ export interface Handler<
 	TScenarios extends AnyHandlerExecuteScenario = never,
 	K extends keyof C = keyof C,
 > {
+	readonly key: K;
 	readonly contract: C;
 	readonly executeScenarios?: TScenarios;
 	executor: Executor<

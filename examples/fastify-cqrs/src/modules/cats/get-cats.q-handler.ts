@@ -13,7 +13,7 @@ type Response = Result<SuccessResponse, CatsNotFoundError>;
 type Scenarios =
 	| QueryHandlerExecuteScenario<{
 			name: "public";
-			excludePreHandlers: ["auth"];
+			excludePreHandlers: ["auth", "tenant", "logging"];
 	  }>
 	| QueryHandlerExecuteScenario<{
 			// includePreHandlers: ["tenant"];
@@ -25,12 +25,8 @@ type Context = Scenarios["context"];
 export class GetCatsQueryHandler
 	implements Handler<GetCatsQueryHandler["contract"], Context, Scenarios>
 {
-	static readonly key = "cats/get-cats";
-	declare readonly contract: Contract<
-		typeof GetCatsQueryHandler.key,
-		Payload,
-		Response
-	>;
+	readonly key = "cats/get-cats";
+	declare readonly contract: Contract<typeof this.key, Payload, Response>;
 	declare readonly executeScenarios: Scenarios;
 
 	private readonly instanceId = Math.random().toString(36).substring(7);
@@ -41,6 +37,7 @@ export class GetCatsQueryHandler
 	) {}
 
 	async executor(payload: Payload, context: Context): Promise<Response> {
+		console.log(context, "CONTExt");
 		const { userId, roles } = this.normalizeContext(context);
 
 		// context is auto-typed from module's queryPreHandlers

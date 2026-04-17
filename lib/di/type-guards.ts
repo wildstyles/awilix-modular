@@ -3,6 +3,7 @@ import type { ForwardRef } from "./module-ref.types.js";
 import type {
 	ClassController,
 	ClassHandler,
+	ClassMiddleware,
 	ClassProvider,
 	FactoryProvider,
 	FunctionProvider,
@@ -22,6 +23,16 @@ export function isClassController(
 		typeof controller === "object" &&
 		controller !== null &&
 		"useClass" in controller
+	);
+}
+
+export function isClassMiddleware(
+	middleware: unknown,
+): middleware is ClassMiddleware {
+	return (
+		typeof middleware === "object" &&
+		middleware !== null &&
+		"useClass" in middleware
 	);
 }
 

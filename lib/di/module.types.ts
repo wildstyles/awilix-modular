@@ -4,6 +4,7 @@ import type { ForwardRef, ModuleRef } from "./module-ref.types.js";
 import type {
 	AnyController,
 	ClassHandler,
+	ClassMiddleware,
 	DefPreHandlerMap,
 	DefProviderMap,
 	Provider,
@@ -137,7 +138,9 @@ type ToModulePreHandlerMap<T extends DefPreHandlerMap> = [keyof T] extends [
 	never,
 ]
 	? EmptyObject
-	: { [K in keyof T]: Constructor<T[K]> };
+	: {
+			[K in keyof T]: Constructor<T[K]> | ClassMiddleware<Constructor<T[K]>>;
+		};
 
 type WithPreHandlers<
 	Def extends StaticModuleDef,

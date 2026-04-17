@@ -28,11 +28,12 @@ export class CatsAuthMiddleware implements Middleware {
 		// Read from executionContext (immutable, from HTTP layer)
 		const token = executionContext.token;
 
+		console.log("-------------------AUTH--------------------------");
+
 		// Simulate token verification
 		if (!token || token === "invalid") {
-			console.log("[Cats Auth Middleware] Invalid token - returning error");
 			// Return error - type checked via unique error code
-			return Result.error(new UnauthorizedError());
+			// return Result.error(new UnauthorizedError());
 		}
 
 		// In real app: verify JWT token
@@ -41,13 +42,6 @@ export class CatsAuthMiddleware implements Middleware {
 			userId: "cats-user-456",
 			roles: ["cat-admin", "user"],
 		};
-
-		console.log(
-			"[Cats Auth Middleware] Token:",
-			token,
-			"- Adding user to context:",
-			mockUser.userId,
-		);
 
 		// Return success
 		return Result.ok(mockUser);

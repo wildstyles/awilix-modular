@@ -91,16 +91,17 @@ export type ClassHandler<H extends Constructor<any> = Constructor<any>> = {
 export interface ConstructorMiddleware<
 	C extends AnyMiddlewareContract = AnyMiddlewareContract,
 > {
-	readonly key: keyof C;
-	readonly contract: C;
 	new (...args: any[]): Middleware<C>;
 }
 
-export type ClassMiddleware<
-	M extends ConstructorMiddleware<any> = ConstructorMiddleware<any>,
-> = {
+export type ClassMiddleware<M extends Constructor<any> = Constructor<any>> = {
 	useClass: M;
 } & BuildResolverOptions<any>;
+
+/**
+ * Union type for any middleware (constructor or class-based).
+ */
+export type AnyMiddleware = ClassMiddleware | Constructor<Middleware>;
 
 // ============================================================================
 // Provider Mapping Helper

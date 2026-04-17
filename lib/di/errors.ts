@@ -1,5 +1,3 @@
-import type { HandlerType } from "./handler-processor.js";
-
 export class DuplicateControllersInModuleError extends Error {
 	constructor(moduleName: string) {
 		super(
@@ -91,10 +89,18 @@ export class HandlerMissingStaticKeyError extends Error {
 	}
 }
 
-export class MediatorIsNotProvided extends Error {
-	constructor(handlerType: HandlerType) {
+export class MiddlewareNameConflictError extends Error {
+	constructor(
+		moduleName: string,
+		middlewareKey: string,
+		importedModuleName: string,
+		handlerType: "query" | "command",
+	) {
 		super(
-			`${handlerType}Mediator is not instanciated. Please provide ${handlerType}Mediator param to DiContext`,
+			`Module "${moduleName}" has a ${handlerType} pre-handler named "${middlewareKey}" ` +
+				`that conflicts with an exported pre-handler from module "${importedModuleName}". ` +
+				`Pre-handler names must be unique within a module scope.`,
 		);
+		this.name = "MiddlewareNameConflictError";
 	}
 }
