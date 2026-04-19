@@ -1,20 +1,22 @@
-import { Result, type Result as ResultType } from "../result/result.js";
+import type { AnyContract } from "./contract.types.js";
 import * as errors from "./errors.js";
-import type { AnyContract, Executor, ExtractPayload } from "./handler.types.js";
+import type { Executor, ExtractPayload } from "./handler.types.js";
 import type {
-	ExecutePreHandlerOptions,
+	ExecuteArgs,
 	ExecuteResponse,
+	ExecuteResponseByScenario,
 	ExecuteRuntimeOptions,
+	ExtractScenarioName,
+} from "./mediator.types.js";
+import type {
+	AnyContext,
+	ExecutionContext,
 	MiddlewareResolver,
 	MiddlewareResolverMap,
-} from "./mediator.types.js";
-import type { AnyContext, ExecutionContext } from "./middleware.types.js";
+} from "./middleware.types.js";
+import { Result, type Result as ResultType } from "./result.js";
 
-export class Mediator<
-	C extends AnyContract,
-	TPreHandlerKey extends string = never,
-	TPreHandlerErrorMap extends Record<string, unknown> = Record<never, never>,
-> {
+export class Mediator<C extends AnyContract> {
 	private handlers = new Map<string, Executor>();
 	private middlewareResolvers: MiddlewareResolverMap;
 	private moduleName: string;
@@ -34,28 +36,28 @@ export class Mediator<
 		this.handlers.set(keyStr, executor);
 	}
 
+	// This overload pins `scenario` to a literal and returns only that
+	// scenario's precomputed returnType. Without it, TS often widens options.
+	async execute<K extends C["key"], Name extends ExtractScenarioName<C, K>>(
+		key: K,
+		payload: ExtractPayload<C, K>,
+		options: ExecuteRuntimeOptions<C, K> & { scenario: Name },
+	): Promise<ExecuteResponseByScenario<C, K, Name>>;
+
 	async execute<
-		K extends keyof C,
-		TOptions extends ExecuteRuntimeOptions<
-			C,
-			K,
-			TPreHandlerKey
-		> = ExecuteRuntimeOptions<C, K, TPreHandlerKey>,
+		K extends C["key"],
+		TOptions extends ExecuteRuntimeOptions<C, K> = ExecuteRuntimeOptions<C, K>,
 	>(
 		key: K,
 		payload: ExtractPayload<C, K>,
-		options?: TOptions,
-	): Promise<
-		ExecuteResponse<C, K, TPreHandlerKey, TPreHandlerErrorMap, TOptions>
-	> {
-		type Response = ExecuteResponse<
-			C,
-			K,
-			TPreHandlerKey,
-			TPreHandlerErrorMap,
-			TOptions
-		>;
+		...args: ExecuteArgs<C, K, TOptions>
+	): Promise<ExecuteResponse<C, K>>;
 
+	async execute<K extends C["key"]>(
+		key: K,
+		payload: ExtractPayload<C, K>,
+		options?: ExecuteRuntimeOptions<C, K>,
+	): Promise<unknown> {
 		const keyStr = String(key);
 		const executor = this.handlers.get(keyStr);
 
@@ -63,12 +65,12 @@ export class Mediator<
 			throw new errors.HandlerNotRegisteredError(keyStr, this.moduleName);
 		}
 
-		const { executionContext, includePreHandlers, excludePreHandlers } =
+		const { executionContext, includePreHandlerKeys, excludePreHandlerKeys } =
 			options ?? {};
 
 		const applicableMiddlewares = this.filterMiddlewareResolvers({
-			excludePreHandlers,
-			includePreHandlers,
+			excludePreHandlerKeys,
+			includePreHandlerKeys,
 		});
 
 		const middlewareResult = await this.executeMiddlewares(
@@ -78,7 +80,7 @@ export class Mediator<
 		);
 
 		if (middlewareResult.type === "error") {
-			return middlewareResult.error as Response;
+			return middlewareResult.error as unknown;
 		}
 
 		const handlerResult = await executor(payload, middlewareResult.context);
@@ -86,10 +88,10 @@ export class Mediator<
 		if (middlewareResult.hasResultMiddleware) {
 			return (
 				this.isResult(handlerResult) ? handlerResult : Result.ok(handlerResult)
-			) as Response;
+			) as unknown;
 		}
 
-		return handlerResult as Response;
+		return handlerResult as unknown;
 	}
 
 	private async executeMiddlewares(
@@ -156,22 +158,49 @@ export class Mediator<
 		};
 	}
 
-	private filterMiddlewareResolvers(
-		options?: ExecutePreHandlerOptions,
-	): Array<[string, MiddlewareResolver]> {
-		const { includePreHandlers = [], excludePreHandlers = [] } = options ?? {};
+	private filterMiddlewareResolvers(options?: {
+		includePreHandlerKeys?: readonly string[];
+		excludePreHandlerKeys?: readonly string[];
+	}): Array<[string, MiddlewareResolver]> {
+		const { includePreHandlerKeys = [], excludePreHandlerKeys = [] } =
+			options ?? {};
 
-		return Array.from(this.middlewareResolvers.entries()).filter(([key]) => {
-			if (excludePreHandlers.includes(key)) {
-				return false;
+		const filtered = Array.from(this.middlewareResolvers.entries()).filter(
+			([key]) => {
+				if (excludePreHandlerKeys.includes(key)) {
+					return false;
+				}
+
+				if (includePreHandlerKeys.length > 0) {
+					return includePreHandlerKeys.includes(key);
+				}
+
+				return true;
+			},
+		);
+
+		this.ensureMiddlewareDependencies(filtered);
+
+		return filtered;
+	}
+
+	private ensureMiddlewareDependencies(
+		middlewares: Array<[string, MiddlewareResolver]>,
+	): void {
+		const processedKeys: string[] = [];
+
+		for (const [key, resolver] of middlewares) {
+			const middleware = resolver();
+			const requires = middleware.requires || [];
+
+			for (const requiredKey of requires) {
+				if (!processedKeys.includes(requiredKey)) {
+					throw new errors.MiddlewareRequiredError(key, requiredKey);
+				}
 			}
 
-			if (includePreHandlers.length > 0) {
-				return includePreHandlers.includes(key);
-			}
-
-			return true;
-		});
+			processedKeys.push(key);
+		}
 	}
 
 	private mergeContext(
@@ -191,12 +220,9 @@ export class Mediator<
 			);
 		}
 
-		// Check for key conflicts
 		const currentKeys = Object.keys(currentContext);
 		const newKeys = Object.keys(data);
-		const conflictingKeys = newKeys.filter((key) =>
-			currentKeys.includes(key),
-		);
+		const conflictingKeys = newKeys.filter((key) => currentKeys.includes(key));
 
 		if (conflictingKeys.length > 0) {
 			throw new errors.ContextKeyConflictError(middlewareKey, conflictingKeys);

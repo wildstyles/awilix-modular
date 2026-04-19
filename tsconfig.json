@@ -8,7 +8,7 @@
 		"allowSyntheticDefaultImports": true,
 		"target": "es2022",
 		"sourceMap": false,
-		"incremental": false,
+		"incremental": true,
 		"strict": true,
 		"allowJs": false,
 		"strictPropertyInitialization": false,

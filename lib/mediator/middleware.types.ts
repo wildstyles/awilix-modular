@@ -1,87 +1,106 @@
+import type { Result } from "./result.js";
+
+type EmptyObject = Record<never, never>;
+
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
 export interface ExecutionContext {}
 
-/**
- * Registry for middleware return types
- * Each tag maps to either:
- * - Result<ContextData, ErrorType> - middleware that can return errors
- * - ContextData - middleware that always succeeds
- *
- * @example
- * interface MiddlewareTagRegistry {
- *   auth: Result<{ userId: string, roles: string[] }, UnauthorizedError>;
- *   logging: { requestId: string, timestamp: number };
- * }
- */
-// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
-export interface MiddlewareTagRegistry {}
+// Default context when no tags specified
+export type EmptyContext = EmptyObject;
+export type AnyMiddlewareContract = MiddlewareContract<string, unknown, any>;
+export type AnyContext = Record<string, unknown>;
+export type MiddlewareResolver = () => Middleware;
+export type MiddlewareResolverMap = Map<string, () => Middleware>;
 
-// biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
-export interface ContextFromTags {}
-
+export type Middleware<
+	C extends AnyMiddlewareContract = AnyMiddlewareContract,
+> = MiddlewareRequires<C> & {
+	readonly contract: C;
+	execute: MiddlewareFn<
+		ExtractContractContext<C>,
+		ExtractMiddlewareReturnType<C>
+	>;
+};
 /**
  * Extract context data from middleware return type
  * If T is Result<Data, Error>, extracts Data
  * Otherwise returns T as-is
  * Ensures result is always an object type (AnyContext compatible)
  */
-export type ExtractMiddlewareContext<T> = T extends
-	| { readonly ok: true; readonly value: infer Data }
-	| { readonly ok: false; readonly error: any }
-	? Data extends AnyContext
+export type ExtractMiddlewareContext<T> = [T] extends [Result<infer Data, any>]
+	? Data extends Record<string, unknown>
 		? Data
-		: never
-	: T extends AnyContext
+		: EmptyObject
+	: T extends Record<string, unknown>
 		? T
-		: never;
+		: EmptyObject;
 
-/**
- * Extract error type from middleware return type
- * If T is Result<Data, Error>, extracts Error
- * Otherwise returns never
- */
-type ExtractMiddlewareError<T> = T extends {
-	readonly ok: false;
-	readonly error: infer Err;
-}
-	? Err
-	: never;
-
-/**
- * Build MiddlewareErrorRegistry from MiddlewareTagRegistry
- * Automatically extracts error types from Result returns
- */
-export type MiddlewareErrorRegistry = {
-	[K in keyof MiddlewareTagRegistry]: ExtractMiddlewareError<
-		MiddlewareTagRegistry[K]
-	>;
+export type MiddlewareContract<
+	K extends string,
+	ReturnType,
+	RequiredContracts extends readonly AnyMiddlewareContract[] = readonly [],
+> = {
+	key: K;
+	returnType: ReturnType;
+	requires: ExtractRequiredKeysTupleFromContracts<RequiredContracts>;
+	context: MergeContextFromContracts<RequiredContracts>;
 };
 
-// Default context when no tags specified
-// biome-ignore lint/complexity/noBannedTypes: {} is the correct type for empty object
-export type EmptyContext = {};
-
-export type AnyContext = Record<string, unknown>;
-
-/**
- * Middleware contract - similar to Handler Contract
- * Defines the tag and return type for a middleware
- * @param Tag - The middleware tag (unique identifier)
- * @param ReturnType - What the middleware returns (context data or Result)
- * @param RequiredTag - Optional tag this middleware depends on
- */
-export type MiddlewareContract<K extends string, ReturnType> = {
-	[Key in K]: {
-		returnType: ReturnType;
-	};
-};
-
-export type AnyMiddlewareContract = MiddlewareContract<string, unknown>;
+type ExtractRequiredKeysTupleFromContracts<
+	Contracts extends readonly AnyMiddlewareContract[],
+> = number extends Contracts["length"]
+	? readonly string[]
+	: Contracts extends readonly []
+		? readonly []
+		: Contracts extends readonly [infer First, ...infer Rest]
+			? First extends AnyMiddlewareContract
+				? Rest extends readonly AnyMiddlewareContract[]
+					? readonly [
+							First["key"],
+							...ExtractRequiredKeysTupleFromContracts<Rest>,
+						]
+					: readonly [First["key"]]
+				: readonly []
+			: readonly [];
 
 /**
- * Extract return type from middleware contract
+ * Merge all contexts from required contracts
  */
-export type MiddlewareFn<
+type MergeContextFromContracts<
+	Contracts extends readonly AnyMiddlewareContract[],
+> = number extends Contracts["length"]
+	? AnyContext
+	: Contracts extends readonly []
+		? EmptyObject
+		: Contracts extends readonly [infer First, ...infer Rest]
+			? First extends AnyMiddlewareContract
+				? Rest extends readonly AnyMiddlewareContract[]
+					? ExtractMiddlewareContext<First["returnType"]> &
+							MergeContextFromContracts<Rest>
+					: ExtractMiddlewareContext<First["returnType"]>
+				: EmptyObject
+			: EmptyObject;
+
+type ExtractMiddlewareReturnType<C extends AnyMiddlewareContract> =
+	C["returnType"];
+
+/**
+ * Extract required keys from middleware contract
+ */
+type ExtractRequiredKeys<C extends AnyMiddlewareContract> =
+	C["requires"][number];
+
+type ExtractRequiredList<C extends AnyMiddlewareContract> = C["requires"];
+
+/**
+ * Extract context from middleware contract
+ */
+type ExtractContractContext<C extends AnyMiddlewareContract> = C["context"];
+
+/**
+ * Middleware execute function with typed context and return type
+ */
+type MiddlewareFn<
 	RequiredContext extends AnyContext = EmptyContext,
 	ReturnType = unknown,
 > = (
@@ -90,9 +109,10 @@ export type MiddlewareFn<
 	executionContext: ExecutionContext,
 ) => Promise<ReturnType>;
 
-export interface Middleware<
-	C extends AnyMiddlewareContract = AnyMiddlewareContract,
-> {
-	readonly contract: C;
-	execute: MiddlewareFn;
-}
+type MiddlewareRequires<C extends AnyMiddlewareContract> = [
+	ExtractRequiredKeys<C>,
+] extends [never]
+	? { readonly requires?: readonly [] }
+	: string extends ExtractRequiredKeys<C>
+		? { readonly requires?: readonly string[] }
+		: { readonly requires: ExtractRequiredList<C> };

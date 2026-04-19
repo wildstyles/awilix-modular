@@ -1,33 +1,29 @@
-import { type Contract, type Handler, Result } from "awilix-modular";
-import type { Deps, QueryHandlerExecuteScenario } from "./cats.module.js";
+import { type Handler, type QueryContract, Result } from "awilix-modular";
+import { CatsNotFoundError } from "@/errors.js";
+import type { CatsModuleDef, Deps } from "./cats.module.js";
 import type {
 	GetCatsQuery as Payload,
 	GetCatsResult as SuccessResponse,
 } from "./get-cats.dto.js";
-import { CatsNotFoundError } from "@/errors.js";
 
 // Handler defines ONLY its own error type
 type Response = Result<SuccessResponse, CatsNotFoundError>;
 // type Response = SuccessResponse;
 
-type Scenarios =
-	| QueryHandlerExecuteScenario<{
-			name: "public";
-			excludePreHandlers: ["auth", "tenant", "logging"];
-	  }>
-	| QueryHandlerExecuteScenario<{
-			// includePreHandlers: ["tenant"];
-			name: "authorized";
-	  }>;
-
-type Context = Scenarios["context"];
-
 export class GetCatsQueryHandler
-	implements Handler<GetCatsQueryHandler["contract"], Context, Scenarios>
+	implements Handler<GetCatsQueryHandler["contract"]>
 {
 	readonly key = "cats/get-cats";
-	declare readonly contract: Contract<typeof this.key, Payload, Response>;
-	declare readonly executeScenarios: Scenarios;
+	declare readonly contract: QueryContract<
+		"cats/get-cats",
+		Payload,
+		Response,
+		// | { name: "auth-logging"; includePreHandlerKeys: ["auth", "logging"] }
+		| { name: "default" }
+		| { name: "logging-tenant"; includePreHandlerKeys: ["logging", "tenant"] },
+		CatsModuleDef
+	>;
+	declare readonly context: this["contract"]["context"];
 
 	private readonly instanceId = Math.random().toString(36).substring(7);
 
@@ -36,7 +32,10 @@ export class GetCatsQueryHandler
 		private readonly dogsService: Deps["dogsService"],
 	) {}
 
-	async executor(payload: Payload, context: Context): Promise<Response> {
+	async executor(
+		_payload: Payload,
+		context: this["context"],
+	): Promise<Response> {
 		console.log(context, "CONTExt");
 		const { userId, roles } = this.normalizeContext(context);
 
@@ -73,7 +72,7 @@ export class GetCatsQueryHandler
 		});
 	}
 
-	private normalizeContext(context: Context): {
+	private normalizeContext(context: this["context"]): {
 		userId: string;
 		roles: string[];
 	} {
@@ -83,14 +82,18 @@ export class GetCatsQueryHandler
 		};
 	}
 
-	private hasRoles(context: Context): context is Context & { roles: string[] } {
+	private hasRoles(
+		context: this["context"],
+	): context is this["context"] & { roles: string[] } {
 		return (
 			"roles" in context &&
 			Array.isArray((context as { roles?: unknown }).roles)
 		);
 	}
 
-	private hasUserId(context: Context): context is Context & { userId: string } {
+	private hasUserId(
+		context: this["context"],
+	): context is this["context"] & { userId: string } {
 		return (
 			"userId" in context &&
 			typeof (context as { userId?: unknown }).userId === "string"

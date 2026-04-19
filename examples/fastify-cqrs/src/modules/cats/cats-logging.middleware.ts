@@ -1,29 +1,38 @@
 import {
-	Middleware,
+	type Middleware,
 	type MiddlewareContract,
 	Result,
 	ExecutionContext,
 } from "awilix-modular";
 import { LoggerError } from "@/errors.js";
+import type { CatsAuthMiddleware } from "./cats-auth.middleware.js";
 
 type ReturnType = Result<{ loggerId: string }, LoggerError>;
+type Contract = MiddlewareContract<
+	typeof CatsLoggingMiddleware.key,
+	ReturnType,
+	[CatsAuthMiddleware["contract"]]
+>;
 
-export class CatsLoggingMiddleware implements Middleware {
-	static readonly key = "cats-tenant";
-	declare readonly contract: MiddlewareContract<
-		typeof CatsLoggingMiddleware.key,
-		ReturnType
-	>;
+export class CatsLoggingMiddleware
+	implements Middleware<Contract>
+{
+	static readonly key = "logging";
+	readonly requires = ["auth"] as const;
+
+	declare readonly contract: Contract;
 
 	async execute(
 		payload: unknown,
-		context: Record<string, unknown>,
+		context: Contract["context"],
 		executionContext: ExecutionContext,
 	): Promise<ReturnType> {
 		// Read from executionContext (immutable, from HTTP layer)
 		const token = executionContext.token;
+		const t = context.userId;
 
 		console.log("--------------LOGGING--------------------");
+		console.log(`User: ${context.userId}, Roles: ${context.roles.join(", ")}`);
 
 		// if (!token || token === "invalid") {
 		// 	return Result.error(new LoggerError());

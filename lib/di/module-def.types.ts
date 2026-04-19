@@ -1,25 +1,16 @@
-import type { EmptyObject, UnknownRecord } from "../common.types.js";
+import type { Mediator } from "../mediator/mediator.js";
+import type { EmptyObject, UnknownRecord } from "./common.types.js";
 import type {
 	ModuleImport,
 	StaticModule,
 	StaticModuleDef,
 	WithForRootConfig,
-} from "../module.types.js";
-import type { DefPreHandlerMap, DefProviderMap } from "../provider.types.js";
+} from "./module.types.js";
 import type {
-	ExtractCommandContext,
-	ExtractQueryContext,
-} from "./extract-context.types.js";
-import type {
-	ExtractCommandMediator,
-	ExtractQueryMediator,
-} from "./extract-mediator.types.js";
-
-export type {
-	CommandScenario,
-	QueryScenario,
-	QueryScenarioInput,
-} from "./handler-scenario.types.js";
+	ClassHandler,
+	DefPreHandlerMap,
+	DefProviderMap,
+} from "./provider.types.js";
 
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
 export interface CommonDependencies {}
@@ -56,8 +47,6 @@ export type ModuleDef<
 	commandPreHandlerExports: ExtractPreHandlerExports<"command", D>;
 	imports: ExtractImports<D>;
 	deps: ExtractDeps<D>;
-	queryContext: ExtractQueryContext<D>;
-	commandContext: ExtractCommandContext<D>;
 	queryHandlers: ExtractHandlers<"query", D>;
 	commandHandlers: ExtractHandlers<"command", D>;
 	queryPreHandlers: ExtractPreHandlers<"query", D>;
@@ -170,3 +159,73 @@ type ExtractExportsFromImports<T extends readonly ModuleImport[]> =
 			? E & ExtractExportsFromImports<Rest>
 			: ExtractExportsFromImports<Rest>
 		: EmptyObject;
+
+// ============================================================================
+// Mediator Extraction
+// ============================================================================
+
+type MediatorHandlerKey = "queryHandlers" | "commandHandlers";
+type MediatorPreHandlerKey = "queryPreHandlers" | "commandPreHandlers";
+
+type MediatorKindMap = {
+	query: {
+		handlerKey: "queryHandlers";
+		preHandlerKey: "queryPreHandlers";
+		preHandlerExportsKey: "queryPreHandlerExports";
+		mediatorKey: "queryMediator";
+	};
+	command: {
+		handlerKey: "commandHandlers";
+		preHandlerKey: "commandPreHandlers";
+		preHandlerExportsKey: "commandPreHandlerExports";
+		mediatorKey: "commandMediator";
+	};
+};
+
+type ExtractQueryMediator<
+	D extends {
+		queryHandlers?: readonly any[];
+		queryPreHandlers?: DefPreHandlerMap;
+		imports?: readonly ModuleImport[];
+	},
+> = ExtractMediator<"query", D>;
+
+type ExtractCommandMediator<
+	D extends {
+		commandHandlers?: readonly any[];
+		commandPreHandlers?: DefPreHandlerMap;
+		imports?: readonly ModuleImport[];
+	},
+> = ExtractMediator<"command", D>;
+
+type ExtractMediator<
+	TKind extends keyof MediatorKindMap,
+	D extends Partial<Record<MediatorHandlerKey, readonly any[]>> &
+		Partial<Record<MediatorPreHandlerKey, DefPreHandlerMap>> & {
+			imports?: readonly ModuleImport[];
+		},
+> = D[MediatorKindMap[TKind]["handlerKey"]] extends readonly [any, ...any[]]
+	? {
+			[K in MediatorKindMap[TKind]["mediatorKey"]]: Mediator<
+				ExtractContractsFromHandlers<D[MediatorKindMap[TKind]["handlerKey"]]>
+			>;
+		}
+	: EmptyObject;
+
+type ExtractContractsFromHandlers<Handlers extends readonly any[]> =
+	Handlers extends readonly [infer First, ...infer Rest]
+		? ExtractContractFromHandler<First> | ExtractContractsFromHandlers<Rest>
+		: never;
+
+type UnwrapClassHandler<H> = H extends ClassHandler ? H["useClass"] : H;
+
+type ExtractContractFromHandler<H> =
+	UnwrapClassHandler<H> extends new (
+		...args: any[]
+	) => infer I
+		? I extends { contract: infer C }
+			? C
+			: never
+		: UnwrapClassHandler<H> extends { contract: infer C }
+			? C
+			: never;

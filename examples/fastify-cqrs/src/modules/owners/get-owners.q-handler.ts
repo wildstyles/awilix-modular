@@ -1,4 +1,4 @@
-import type { Contract, Handler } from "awilix-modular";
+import type { QueryContract, Handler } from "awilix-modular";
 import type {
 	GetOwnersQuery as Payload,
 	GetOwnersResponse as Response,
@@ -8,7 +8,7 @@ export class GetOwnersQueryHandler
 	implements Handler<GetOwnersQueryHandler["contract"]>
 {
 	readonly key = "owners/get-owners";
-	declare readonly contract: Contract<typeof this.key, Payload, Response>;
+	declare readonly contract: QueryContract<typeof this.key, Payload, Response>;
 
 	private readonly instanceId = Math.random().toString(36).substring(7);
 

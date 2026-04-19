@@ -16,11 +16,15 @@ export class OwnersController {
 		const result = await this.queryMediator.execute(
 			"owners/get-owners",
 			req.query,
-			req.context,
+			{
+				executionContext: req.context,
+			},
 		);
 
-		res.status(HttpStatus.OK).send({
-			handlerId: result.handlerId,
-		});
+		if (result.ok) {
+			res.status(HttpStatus.OK).send({
+				handlerId: result.value.handlerId,
+			});
+		}
 	}
 }

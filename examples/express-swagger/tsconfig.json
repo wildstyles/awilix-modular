@@ -17,7 +17,8 @@
 		"rootDir": "./src",
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"awilix-modular": ["../../dist/index.d.ts"]
 		},
 		"outDir": "./dist"
 	},

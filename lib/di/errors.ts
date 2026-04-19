@@ -70,6 +70,16 @@ export class CircularModuleDependencyError extends Error {
 	}
 }
 
+export class GlobalModuleImportsNotAllowedError extends Error {
+	constructor(moduleName: string) {
+		super(
+			`Global module "${moduleName}" cannot have imports. ` +
+				`Keep global modules import-free and register additional globals explicitly in DIContext.globalModules.`,
+		);
+		this.name = "GlobalModuleImportsNotAllowedError";
+	}
+}
+
 export class UnsupportedFrameworkError extends Error {
 	constructor() {
 		super(
@@ -93,12 +103,12 @@ export class MiddlewareNameConflictError extends Error {
 	constructor(
 		moduleName: string,
 		middlewareKey: string,
-		importedModuleName: string,
+		existingModuleName: string,
 		handlerType: "query" | "command",
 	) {
 		super(
 			`Module "${moduleName}" has a ${handlerType} pre-handler named "${middlewareKey}" ` +
-				`that conflicts with an exported pre-handler from module "${importedModuleName}". ` +
+				`that conflicts with a pre-handler already registered from module "${existingModuleName}". ` +
 				`Pre-handler names must be unique within a module scope.`,
 		);
 		this.name = "MiddlewareNameConflictError";

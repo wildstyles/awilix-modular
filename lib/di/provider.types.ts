@@ -1,5 +1,6 @@
 import type { BuildResolverOptions, Constructor } from "awilix";
-import type { AnyContract, Handler } from "lib/mediator/handler.types.js";
+import type { AnyContract } from "lib/mediator/contract.types.js";
+import type { Handler } from "lib/mediator/handler.types.js";
 import type {
 	AnyMiddlewareContract,
 	Middleware,

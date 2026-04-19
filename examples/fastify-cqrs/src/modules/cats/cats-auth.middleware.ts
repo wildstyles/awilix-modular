@@ -1,5 +1,5 @@
 import {
-	Middleware,
+	type Middleware,
 	type MiddlewareContract,
 	Result,
 	ExecutionContext,
@@ -10,19 +10,16 @@ type ReturnType = Result<
 	{ userId: string; roles: string[] },
 	UnauthorizedError
 >;
+type Contract = MiddlewareContract<typeof CatsAuthMiddleware.key, ReturnType>;
 
-// type Contract = MiddlewareContract<"cats-auth", ReturnType>;
+export class CatsAuthMiddleware implements Middleware<Contract> {
+	static readonly key = "auth";
 
-export class CatsAuthMiddleware implements Middleware {
-	static readonly key = "cats-auth";
-	declare readonly contract: MiddlewareContract<
-		typeof CatsAuthMiddleware.key,
-		ReturnType
-	>;
+	declare readonly contract: Contract;
 
 	async execute(
 		payload: unknown,
-		context: Record<string, unknown>,
+		context: Contract["context"], // = {}
 		executionContext: ExecutionContext,
 	): Promise<ReturnType> {
 		// Read from executionContext (immutable, from HTTP layer)

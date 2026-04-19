@@ -239,6 +239,50 @@ describe("DIContext", () => {
 			}).toThrow(ERRORS.RootProviderNameConflictError);
 		});
 
+		it("should throw an error when local query pre-handler conflicts with imported exported query pre-handler", () => {
+			class ImportedQueryMiddleware extends TestableBase {}
+			class LocalQueryMiddleware extends TestableBase {}
+
+			expect(() => {
+				registerModule({
+					name: "MainModule",
+					imports: [
+						{
+							name: "ImportedModule",
+							queryPreHandlerExports: {
+								auth: ImportedQueryMiddleware,
+							},
+						},
+					],
+					queryPreHandlers: {
+						auth: LocalQueryMiddleware,
+					},
+				});
+			}).toThrow(ERRORS.MiddlewareNameConflictError);
+		});
+
+		it("should throw an error when local command pre-handler conflicts with imported exported command pre-handler", () => {
+			class ImportedCommandMiddleware extends TestableBase {}
+			class LocalCommandMiddleware extends TestableBase {}
+
+			expect(() => {
+				registerModule({
+					name: "MainModule",
+					imports: [
+						{
+							name: "ImportedModule",
+							commandPreHandlerExports: {
+								auth: ImportedCommandMiddleware,
+							},
+						},
+					],
+					commandPreHandlers: {
+						auth: LocalCommandMiddleware,
+					},
+				});
+			}).toThrow(ERRORS.MiddlewareNameConflictError);
+		});
+
 		it("should throw an error when factory provider depends on non-existent provider", () => {
 			expect(() => {
 				registerModule({

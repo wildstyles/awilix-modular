@@ -11,7 +11,7 @@
 		"@sinclair/typebox": "^0.34.15",
 		"ajv": "^8.18.0",
 		"awilix": "^10.0.2",
-		"awilix-modular": "file:../..",
+		"awilix-modular": "link:../..",
 		"express": "^4.21.2",
 		"swagger-ui-express": "^5.0.1"
 	},

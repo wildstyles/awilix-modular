@@ -1,5 +1,5 @@
 import { type Controller, httpException } from "awilix-modular";
-import { Deps } from "./cats.module.js";
+import type { Deps } from "./cats.module.js";
 
 import { GetCatsSchema } from "./get-cats.dto.js";
 
@@ -18,6 +18,7 @@ export class CatsController implements Controller {
 			schema: GetCatsSchema,
 			// fully type safe thanks to TypeBoxTypeProvider
 			handler: async (req, res) => {
+				// error type should be merged with applied middlewares
 				const result = await this.queryMediator.execute(
 					"cats/get-cats",
 					{
@@ -26,10 +27,11 @@ export class CatsController implements Controller {
 					},
 					{
 						executionContext: req.context,
-						scenario: "public",
-						// scenario: "authorized",
-						// includePreHandlers: ["logging", "auth", "tenant"],
-						excludePreHandlers: ["auth", "tenant", "logging"],
+						// scenario: "auth-logging",
+						// includePreHandlerKeys: ["auth", "logging"],
+						scenario: "logging-tenant",
+						includePreHandlerKeys: ["logging", "tenant"],
+						// scenario: "default",
 					},
 				);
 

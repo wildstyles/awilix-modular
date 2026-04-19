@@ -1,11 +1,9 @@
 import * as Awilix from "awilix";
+import type { MiddlewareResolverMap } from "lib/mediator/middleware.types.js";
 import type { RouteRegistration } from "../http/openapi-builder.js";
 import { ControllerProcessor } from "./controller-processor.js";
 import * as ERRORS from "./errors.js";
-import {
-	HandlerProcessor,
-	type MiddlewareResolverMap,
-} from "./handler-processor.js";
+import { HandlerProcessor } from "./handler-processor.js";
 import type { AnyModule as M } from "./module.types.js";
 import type { AnyMiddleware, AnyProvider } from "./provider.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
@@ -17,6 +15,7 @@ export interface DiContextOptions {
 	containerOptions?: Awilix.ContainerOptions;
 	rootProviders?: Record<string, AnyProvider>;
 	providerOptions?: Partial<Awilix.BuildResolverOptions<any>>;
+	globalModules?: readonly M[];
 }
 
 export interface ModuleScopeTree<
@@ -37,6 +36,7 @@ export class DIContext {
 	private readonly handlerProcessor: HandlerProcessor;
 	private readonly options: DiContextOptions;
 	private readonly rootContainer: Awilix.AwilixContainer;
+	private globalModulesWithScope: (ModuleScopeTree & { module: M })[] = [];
 
 	private constructor(options: DiContextOptions) {
 		this.options = {
@@ -67,6 +67,7 @@ export class DIContext {
 
 	static create(module: M, options: DiContextOptions): ModuleScopeTree {
 		const context = new DIContext(options);
+		context.initializeGlobalModules();
 
 		return context.registerModuleWithScope(
 			module,
@@ -125,9 +126,10 @@ export class DIContext {
 		m: M,
 		scope: Awilix.AwilixContainer,
 		moduleChain: M[],
+		includeGlobalModules = true,
 	): ModuleScopeTree {
-		this.ensureImportedModulesUniqueness(m);
-		this.ensureNoProviderNameConflicts(m);
+		this.ensureImportedModulesUniqueness(m, includeGlobalModules);
+		this.ensureNoProviderNameConflicts(m, includeGlobalModules);
 		this.markModuleIfImportsUseForwardRef(m);
 
 		const isCircular = moduleChain.includes(m);
@@ -146,14 +148,18 @@ export class DIContext {
 		// Store the scope in the map before processing (for circular references)
 		this.moduleScopeMap.set(m, scope);
 
-		const importedModulesWithScope = this.resolveImports(m).map((module) => ({
-			...this.registerModuleWithScope(
+		const importedModulesWithScope = [
+			...(includeGlobalModules ? this.globalModulesWithScope : []),
+			...this.resolveImports(m).map((module) => ({
+				...this.registerModuleWithScope(
+					module,
+					this.createContainerWithRootProviders(),
+					[...moduleChain, m],
+					includeGlobalModules,
+				),
 				module,
-				this.createContainerWithRootProviders(),
-				[...moduleChain, m],
-			),
-			module,
-		}));
+			})),
+		];
 
 		importedModulesWithScope.forEach(
 			({ module: importedModule, scope: importedScope }) => {
@@ -172,7 +178,12 @@ export class DIContext {
 			},
 		);
 
-		Object.entries(this.sorter.sortByDependencies(m)).forEach(
+		const moduleForSorting: M = {
+			...m,
+			imports: importedModulesWithScope.map((el) => el.module),
+		};
+
+		Object.entries(this.sorter.sortByDependencies(moduleForSorting)).forEach(
 			([key, provider]) => {
 				scope.register({
 					[key]: this.resolveProvider({
@@ -219,6 +230,35 @@ export class DIContext {
 		};
 	}
 
+	private initializeGlobalModules(): void {
+		const globalModules = this.options.globalModules || [];
+		const globalModuleNames = new Set<string>();
+
+		for (const globalModule of globalModules) {
+			if (globalModuleNames.has(globalModule.name)) {
+				throw new ERRORS.DuplicateModuleImportError(
+					"globalModules",
+					globalModule.name,
+				);
+			}
+			if ((globalModule.imports || []).length > 0) {
+				throw new ERRORS.GlobalModuleImportsNotAllowedError(globalModule.name);
+			}
+
+			globalModuleNames.add(globalModule.name);
+		}
+
+		this.globalModulesWithScope = globalModules.map((module) => ({
+			...this.registerModuleWithScope(
+				module,
+				this.createContainerWithRootProviders(),
+				[],
+				false,
+			),
+			module,
+		}));
+	}
+
 	private registerAndBuildMiddlewareResolvers(
 		m: M,
 		scope: Awilix.AwilixContainer,
@@ -238,20 +278,7 @@ export class DIContext {
 
 		const { preHandlersKey, preHandlerExportsKey } = keyMap[handlerType];
 		const resolverMap: MiddlewareResolverMap = new Map();
-
-		for (const [key, middleware] of Object.entries(m[preHandlersKey] ?? {})) {
-			const symbol = Symbol(`prehandler_${m.name}_${key}`);
-
-			scope.register({
-				[symbol]: this.resolveProvider({
-					provider: middleware,
-					resolutionScope: scope,
-					module: m,
-				}),
-			});
-
-			resolverMap.set(key, () => scope.resolve(symbol));
-		}
+		const ownerByKey = new Map<string, string>();
 
 		for (const {
 			module: importedModule,
@@ -264,7 +291,7 @@ export class DIContext {
 					throw new ERRORS.MiddlewareNameConflictError(
 						m.name,
 						key,
-						importedModule.name,
+						ownerByKey.get(key) ?? importedModule.name,
 						handlerType,
 					);
 				}
@@ -283,7 +310,32 @@ export class DIContext {
 				});
 
 				resolverMap.set(key, () => scope.resolve(symbol));
+				ownerByKey.set(key, importedModule.name);
 			}
+		}
+
+		for (const [key, middleware] of Object.entries(m[preHandlersKey] ?? {})) {
+			if (resolverMap.has(key)) {
+				throw new ERRORS.MiddlewareNameConflictError(
+					m.name,
+					key,
+					ownerByKey.get(key) ?? m.name,
+					handlerType,
+				);
+			}
+
+			const symbol = Symbol(`prehandler_${m.name}_${key}`);
+
+			scope.register({
+				[symbol]: this.resolveProvider({
+					provider: middleware,
+					resolutionScope: scope,
+					module: m,
+				}),
+			});
+
+			resolverMap.set(key, () => scope.resolve(symbol));
+			ownerByKey.set(key, m.name);
 		}
 
 		return resolverMap;
@@ -446,10 +498,17 @@ export class DIContext {
 		throw new ERRORS.CircularModuleDependencyError(m.name, chainNames);
 	}
 
-	private ensureImportedModulesUniqueness(m: M) {
+	private ensureImportedModulesUniqueness(m: M, includeGlobalModules = false) {
 		const importedNames = new Set<string>();
 
-		for (const imported of this.resolveImports(m)) {
+		const imports = [
+			...(includeGlobalModules
+				? this.globalModulesWithScope.map((el) => el.module)
+				: []),
+			...this.resolveImports(m),
+		];
+
+		for (const imported of imports) {
 			if (importedNames.has(imported.name)) {
 				throw new ERRORS.DuplicateModuleImportError(m.name, imported.name);
 			}
@@ -458,7 +517,7 @@ export class DIContext {
 		}
 	}
 
-	private ensureNoProviderNameConflicts(m: M) {
+	private ensureNoProviderNameConflicts(m: M, includeGlobalModules = false) {
 		const moduleProviderKeys = Object.keys(m.providers || {});
 		const rootProviderKeys = Object.keys(this.options.rootProviders || {});
 
@@ -470,12 +529,16 @@ export class DIContext {
 			throw new ERRORS.RootProviderNameConflictError(m.name, rootConflicts);
 		}
 
-		const importedProviderKeys = this.resolveImports(m).flatMap((importItem) =>
-			Object.keys(importItem.exports || {}),
-		);
-		const importConflicts = importedProviderKeys.filter((key) =>
-			moduleProviderKeys.includes(key),
-		);
+		const importConflicts = [
+			...(includeGlobalModules
+				? this.globalModulesWithScope.flatMap(({ module: globalModule }) =>
+						Object.keys(globalModule.exports || {}),
+					)
+				: []),
+			...this.resolveImports(m).flatMap((importItem) =>
+				Object.keys(importItem.exports || {}),
+			),
+		].filter((key) => moduleProviderKeys.includes(key));
 
 		if (importConflicts.length > 0) {
 			throw new ERRORS.ProviderNameConflictError(m.name, importConflicts);

@@ -1,7 +1,8 @@
 import * as Awilix from "awilix";
-import type { AnyContract, Handler } from "../mediator/handler.types.js";
+import type { AnyContract } from "../mediator/contract.types.js";
+import type { Handler } from "../mediator/handler.types.js";
 import { Mediator } from "../mediator/mediator.js";
-import type { Middleware } from "../mediator/middleware.types.js";
+import type { MiddlewareResolverMap } from "../mediator/middleware.types.js";
 import * as ERRORS from "./errors.js";
 import type { AnyModule as M } from "./module.types.js";
 import type { ClassHandler } from "./provider.types.js";
@@ -13,10 +14,6 @@ export const HandlerType = {
 } as const;
 
 export type HandlerType = (typeof HandlerType)[keyof typeof HandlerType];
-
-export type MiddlewareResolver = () => Middleware;
-
-export type MiddlewareResolverMap = Map<string, MiddlewareResolver>;
 
 export class HandlerProcessor {
 	constructor(

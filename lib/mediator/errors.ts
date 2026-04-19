@@ -72,3 +72,13 @@ export class ContextKeyConflictError extends Error {
 		this.name = "ContextKeyConflictError";
 	}
 }
+
+export class MiddlewareRequiredError extends Error {
+	constructor(middlewareKey: string, requiredKey: string) {
+		super(
+			`Middleware "${middlewareKey}" requires "${requiredKey}" to run before it. ` +
+				`Ensure "${requiredKey}" is included and appears before "${middlewareKey}" in the execution order.`,
+		);
+		this.name = "MiddlewareRequiredError";
+	}
+}

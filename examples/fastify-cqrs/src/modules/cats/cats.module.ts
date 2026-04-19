@@ -1,23 +1,15 @@
-import {
-	createStaticModule,
-	type ModuleDef,
-	type QueryScenarioInput,
-	type QueryScenario,
-} from "awilix-modular";
+import { createStaticModule, type ModuleDef } from "awilix-modular";
 
 import { OwnersModule } from "@/modules/owners/owners.module.js";
 import { CatsController } from "./cats.controller.js";
 import { CatsService } from "./cats.service.js";
+import { CatsAuthMiddleware } from "./cats-auth.middleware.js";
 import { CatsDecoratedController } from "./cats-decorated.controller.js";
+import { CatsLoggingMiddleware } from "./cats-logging.middleware.js";
 import { CatsScopedController } from "./cats-scoped.controller.js";
 import { DogsService } from "./dogs.service.js";
 import { GetCatsQueryHandler } from "./get-cats.q-handler.js";
 import { GetCatsService } from "./get-cats.service.js";
-
-import { CatsAuthMiddleware } from "./cats-auth.middleware.js";
-import { CatsLoggingMiddleware } from "./cats-logging.middleware.js";
-
-import { TenantModule } from "../tenant/tenant.module.js";
 
 export type CatsModuleDef = ModuleDef<{
 	providers: {
@@ -26,30 +18,25 @@ export type CatsModuleDef = ModuleDef<{
 		getCatsService: GetCatsService;
 	};
 	exportKeys: "catsService";
-	imports: [typeof OwnersModule, typeof TenantModule];
+	imports: [typeof OwnersModule];
 	queryHandlers: [GetCatsQueryHandler];
 	queryPreHandlers: {
-		logging: CatsLoggingMiddleware;
 		auth: CatsAuthMiddleware;
+		logging: CatsLoggingMiddleware;
 	};
 }>;
 
 export type Deps = CatsModuleDef["deps"];
-export type QueryContext = CatsModuleDef["queryContext"];
-
-export type QueryHandlerExecuteScenario<
-	TScenario extends QueryScenarioInput<CatsModuleDef>,
-> = QueryScenario<CatsModuleDef, TScenario>;
 
 export const CatsModule = createStaticModule<CatsModuleDef>({
 	name: "CatsModule",
 
-	imports: [OwnersModule, TenantModule],
+	imports: [OwnersModule],
 
 	queryPreHandlers: {
+		auth: CatsAuthMiddleware,
 		logging: { useClass: CatsLoggingMiddleware },
 		// logging: CatsLoggingMiddleware,
-		auth: CatsAuthMiddleware,
 	},
 
 	providerOptions: {
