@@ -5,7 +5,7 @@ import type {
 	StaticModule as M,
 } from "../lib/di/module.types.js";
 import type {
-	CommonDependencies,
+	GlobalDependencies,
 	ModuleDef as D,
 } from "../lib/di/module-def.types.js";
 import {
@@ -272,13 +272,13 @@ describe("Module", () => {
 		}>;
 
 		type Deps = M4Def["deps"];
+		type ExpectedDeps = { p4: P4 } & Pick<{ p1: P1 }, "p1"> &
+			Pick<{ p2: P2 }, "p2"> &
+			EmptyObject &
+			GlobalDependencies;
 
-		expect<Deps>().type.toBe<
-			{ p4: P4 } & Pick<{ p1: P1 }, "p1"> &
-				Pick<{ p2: P2 }, "p2"> &
-				EmptyObject &
-				CommonDependencies
-		>();
+		expect<Deps>().type.toBeAssignableTo<ExpectedDeps>();
+		expect<ExpectedDeps>().type.toBeAssignableTo<Deps>();
 
 		expect<{ p1: P1; p2: P2; p4: P4 }>().type.toBeAssignableTo<Deps>();
 		expect<{ p1: P1; p2: P2; p4: P4; p5: P5 }>().type.toBeAssignableTo<Deps>();

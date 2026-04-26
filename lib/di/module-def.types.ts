@@ -13,7 +13,17 @@ import type {
 } from "./provider.types.js";
 
 // biome-ignore lint/suspicious/noEmptyInterface: Intentionally empty for declaration merging
-export interface CommonDependencies {}
+export interface GlobalDependencies {}
+
+export type NormalizeGlobalDependencies<T> = [T] extends [DefProviderMap]
+	? T
+	: EmptyObject;
+
+export type InferGlobalDependencies<TModuleDef> = TModuleDef extends {
+	exports: infer TExports;
+}
+	? NormalizeGlobalDependencies<TExports>
+	: EmptyObject;
 
 // ============================================================================
 // ModuleDef
@@ -136,7 +146,7 @@ type ExtractDeps<
 	ExtractImportsExports<D> &
 	ExtractQueryMediator<D> &
 	ExtractCommandMediator<D> &
-	CommonDependencies;
+	NormalizeGlobalDependencies<GlobalDependencies>;
 
 type ExtractImportsExports<D extends { imports?: readonly ModuleImport[] }> =
 	D["imports"] extends readonly ModuleImport[]

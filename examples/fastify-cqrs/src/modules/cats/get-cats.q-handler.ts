@@ -18,7 +18,7 @@ export class GetCatsQueryHandler
 		"cats/get-cats",
 		Payload,
 		Response,
-		// | { name: "auth-logging"; includePreHandlerKeys: ["auth", "logging"] }
+		| { name: "auth-logging"; includePreHandlerKeys: ["auth", "logging"] }
 		| { name: "default" }
 		| { name: "logging-tenant"; includePreHandlerKeys: ["logging", "tenant"] },
 		CatsModuleDef

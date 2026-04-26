@@ -13,7 +13,6 @@ export class HandlerAlreadyRegisteredError extends Error {
 	}
 }
 
-// TODO: add requires for midleware
 export class MiddlewareDependencyNotSatisfiedError extends Error {
 	constructor(handlerKey: string, middlewareTag: string, requiredTag: string) {
 		super(

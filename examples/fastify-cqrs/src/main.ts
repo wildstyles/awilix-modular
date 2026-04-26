@@ -1,13 +1,10 @@
-import { DIContext, type InferGlobalQueryPreHandlers } from "awilix-modular";
+import { DIContext } from "awilix-modular";
 
 import { buildApp } from "@/app.js";
 import { AppModule } from "@/modules/index.js";
 import {
 	TenantModule,
-	type TenantModuleDef,
 } from "@/modules/tenant/tenant.module.js";
-import type { FastifyInstance } from "@/types.js";
-import type { RequestContext } from "./request-context.middleware.js";
 import { setupSwagger } from "./setup-swagger.js";
 
 async function bootstrap() {
@@ -17,10 +14,7 @@ async function bootstrap() {
 
 	DIContext.create(AppModule, {
 		framework: fastify,
-		rootProviders: {
-			app: fastify,
-		},
-		globalModules: [TenantModule],
+		globalModules: [TenantModule.forRoot({ app: fastify })],
 	});
 
 	try {
@@ -33,15 +27,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-
-declare module "awilix-modular" {
-	interface ExecutionContext extends RequestContext {}
-
-	// TODO: instead of common deps make infering from global modules
-	interface CommonDependencies {
-		app: FastifyInstance;
-	}
-
-	interface GlobalQueryPreHandlers
-		extends InferGlobalQueryPreHandlers<TenantModuleDef> {}
-}

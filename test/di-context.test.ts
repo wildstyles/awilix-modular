@@ -52,11 +52,6 @@ describe("DIContext", () => {
 		}
 	}
 
-	const rootProviders = {
-		logger: { info: vi.fn(), error: vi.fn() },
-		config: { env: "test" },
-	};
-	const rootResolversCount = Object.keys(rootProviders).length;
 	const mockedExpress = {
 		get: vi.fn(),
 		post: vi.fn(),
@@ -74,7 +69,6 @@ describe("DIContext", () => {
 			},
 			{
 				framework: mockedExpress,
-				rootProviders,
 				containerOptions: {
 					injectionMode: "PROXY",
 				},
@@ -82,114 +76,6 @@ describe("DIContext", () => {
 			},
 		);
 	}
-
-	describe("Root Providers", () => {
-		it("should support all provider types and be singletons across modules", () => {
-			class DatabaseConfig extends TestableBase {}
-
-			// Simulate MikroORM's raw function and EntityManager
-			const rawFunction = (sql: string) => ({ __raw: sql });
-			const mockEntityManager = {
-				find: vi.fn(),
-				persist: vi.fn(),
-				flush: vi.fn(),
-			};
-
-			const rootProviders = {
-				// Plain function
-				raw: rawFunction,
-				// Object instance
-				em: mockEntityManager,
-				// Primitives
-				apiUrl: "https://api.example.com",
-				timeout: 3000,
-				isProduction: false,
-				// Plain object
-				appConfig: { env: "test", debug: true },
-				// Class constructor (singleton by default)
-				singletonService: class SingletonService extends TestableBase {},
-				// Class provider with TRANSIENT lifetime
-				transientService: {
-					useClass: class TransientService extends TestableBase {},
-					lifetime: Lifetime.TRANSIENT,
-				},
-				database: {
-					provide: DatabaseConfig,
-					inject: ["apiUrl", "timeout"],
-					useFactory: (apiUrl: string, timeout: number) =>
-						new DatabaseConfig({ apiUrl, timeout }),
-				},
-			};
-
-			const { scope, importedScopes } = registerModule(
-				{
-					imports: [
-						{
-							name: "ModuleA",
-							providers: {
-								serviceA: class ServiceA extends TestableBase {},
-							},
-						},
-						{
-							name: "ModuleB",
-							providers: {
-								serviceB: class ServiceB extends TestableBase {},
-							},
-						},
-					],
-					providers: {
-						appService: class AppService extends TestableBase {},
-					},
-				},
-				{ rootProviders },
-			);
-
-			const moduleA = importedScopes.get("ModuleA");
-
-			// Primitives
-			expect(scope.resolve("apiUrl")).toBe("https://api.example.com");
-			expect(scope.resolve("timeout")).toBe(3000);
-			expect(scope.resolve("isProduction")).toBe(false);
-			// Plain object
-			expect(scope.resolve("appConfig")).toEqual({ env: "test", debug: true });
-
-			// Plain function (MikroORM's raw)
-			const resolvedRaw = scope.resolve("raw");
-			expect(resolvedRaw).toBe(rawFunction);
-			expect(resolvedRaw("SELECT * FROM users")).toEqual({
-				__raw: "SELECT * FROM users",
-			});
-
-			// Object instance (MikroORM's EntityManager)
-			const resolvedEm = scope.resolve("em");
-			expect(resolvedEm).toBe(mockEntityManager);
-			expect(resolvedEm.find).toBe(mockEntityManager.find);
-
-			// Factory provider
-			const database = scope.resolve<DatabaseConfig>("database");
-			expect(database).toBeInstanceOf(DatabaseConfig);
-			expect(database.getDeps().apiUrl).toBe("https://api.example.com");
-			expect(database.getDeps().timeout).toBe(3000);
-
-			// Transient provider - different instances
-			const transient1 = moduleA?.scope.resolve("transientService");
-			const transient2 = moduleA?.scope.resolve("transientService");
-			expect(transient1.instanceId).not.toBe(transient2.instanceId);
-
-			// Singleton across all module scopes
-			const singletonFromModuleA = moduleA?.scope.resolve("singletonService");
-			const singletonFromModuleB = importedScopes
-				.get("ModuleB")
-				?.scope.resolve("singletonService");
-
-			expect(singletonFromModuleA).toBe(singletonFromModuleB);
-
-			const serviceA = moduleA?.scope.resolve("serviceA");
-			expect(serviceA.getDepKeys().length).toBe(
-				Object.keys(rootProviders).length + 1,
-			);
-		});
-	});
 
 	describe("Ensure that module interactions/declarations are correct", () => {
 		it("should throw an error when a module has duplicate imports", () => {
@@ -225,18 +111,6 @@ describe("DIContext", () => {
 					},
 				});
 			}).toThrow(ERRORS.ProviderNameConflictError);
-		});
-
-		it("should throw an error when a module has provider name conflicts with root providers", () => {
-			expect(() => {
-				registerModule({
-					name: "MainModule",
-					providers: {
-						logger: class Logger extends TestableBase {},
-						config: class Config extends TestableBase {},
-					},
-				});
-			}).toThrow(ERRORS.RootProviderNameConflictError);
 		});
 
 		it("should throw an error when local query pre-handler conflicts with imported exported query pre-handler", () => {
@@ -499,7 +373,7 @@ describe("DIContext", () => {
 			const factoryServiceA = scope.resolve("factoryServiceA");
 			const factoryServiceB = scope.resolve("factoryServiceB");
 
-			expect(serviceA.getDepKeys().length).toBe(4 + rootResolversCount);
+			expect(serviceA.getDepKeys().length).toBe(4);
 			expect(serviceA.getDepKeys()).toContain("factoryServiceA");
 			expect(serviceA.getDepKeys()).toContain("factoryServiceB");
 			expect(serviceA.getDepKeys()).toContain("innerService");
@@ -509,7 +383,7 @@ describe("DIContext", () => {
 			expect(factoryServiceA.getDepKeys()).toContain("serviceA");
 			expect(factoryServiceA.getDepKeys()).toContain("innerService");
 			expect(factoryServiceA.getDeps().innerService.getDepKeys().length).toBe(
-				2 + rootResolversCount,
+				2,
 			);
 			expect(factoryServiceA.getDeps().innerService.getDepKeys()).toContain(
 				"p1",

@@ -33,16 +33,21 @@ describe("ControllerProcessor", () => {
 		mockExpress = createMockExpress();
 	});
 
-	// Helper to register modules
 	const registerModule = (
 		module: AnyModule,
 		options?: Partial<DiContextOptions>,
 	) => {
-		return DIContext.create(module, {
-			rootProviders: {
-				app: options?.framework || mockExpress,
+		const framework = options?.framework || mockExpress;
+		const moduleWithAppProvider: AnyModule = {
+			...module,
+			providers: {
+				app: framework,
+				...(module.providers || {}),
 			},
-			framework: options?.framework || mockExpress,
+		};
+
+		return DIContext.create(moduleWithAppProvider, {
+			framework,
 			...options,
 		});
 	};
@@ -156,7 +161,7 @@ describe("ControllerProcessor", () => {
 	});
 
 	describe("Same Module Instance Imported Multiple Times", () => {
-		it("should skip register controller once when same module instance is imported multiple times", () => {
+		it("should skip register controller when same module instance is imported multiple times", () => {
 			const SharedModule = {
 				name: "SharedModule",
 				controllers: [DecoratedController],
@@ -189,13 +194,10 @@ describe("ControllerProcessor", () => {
 				controllers: [DecoratedController],
 			}));
 
-			registerModule(
-				{
-					name: "AppModule",
-					imports: [DynamicModule.forRoot({})],
-				},
-				{ framework: mockExpress },
-			);
+			registerModule({
+				name: "AppModule",
+				imports: [DynamicModule.forRoot({})],
+			});
 
 			expect(mockExpress.get).not.toHaveBeenCalled();
 		});
@@ -206,13 +208,10 @@ describe("ControllerProcessor", () => {
 				controllers: [DecoratedController],
 			}));
 
-			registerModule(
-				{
-					name: "AppModule",
-					imports: [DynamicModule.forRoot({}, { registerControllers: true })],
-				},
-				{ framework: mockExpress },
-			);
+			registerModule({
+				name: "AppModule",
+				imports: [DynamicModule.forRoot({}, { registerControllers: true })],
+			});
 
 			expect(mockExpress.get).toHaveBeenCalledWith(
 				"/test",

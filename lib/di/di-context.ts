@@ -17,7 +17,6 @@ export interface DiContextOptions {
 	framework: unknown;
 	beforeRouteRegistered?: (params: RouteRegistration) => any[];
 	containerOptions?: Awilix.ContainerOptions;
-	rootProviders?: Record<string, AnyProvider>;
 	providerOptions?: Partial<Awilix.BuildResolverOptions<any>>;
 	globalModules?: readonly M[];
 }
@@ -30,8 +29,6 @@ export interface ModuleScopeTree<
 	importedScopes: Map<string, ModuleScopeTree>;
 }
 
-const ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL = Symbol("rootProvidersResolverMap");
-
 export class DIContext {
 	private readonly forwardRefModules = new WeakSet<M>();
 	private readonly moduleScopeMap = new WeakMap<M, Awilix.AwilixContainer>();
@@ -39,7 +36,6 @@ export class DIContext {
 	private readonly controllerProcessor: ControllerProcessor;
 	private readonly handlerProcessor: HandlerProcessor;
 	private readonly options: DiContextOptions;
-	private readonly rootContainer: Awilix.AwilixContainer;
 	private globalModulesWithScope: (ModuleScopeTree & { module: M })[] = [];
 
 	private constructor(options: DiContextOptions) {
@@ -64,9 +60,6 @@ export class DIContext {
 		this.handlerProcessor = new HandlerProcessor(
 			this.options.providerOptions || {},
 		);
-
-		this.rootContainer = Awilix.createContainer(this.options.containerOptions);
-		this.initializeRootProviders();
 	}
 
 	static create(module: M, options: DiContextOptions): ModuleScopeTree {
@@ -75,55 +68,13 @@ export class DIContext {
 
 		return context.registerModuleWithScope(
 			module,
-			context.createContainerWithRootProviders(),
+			context.createContainer(),
 			[],
 		);
 	}
 
-	private createContainerWithRootProviders(): Awilix.AwilixContainer {
-		const container = Awilix.createContainer(this.options.containerOptions);
-		container.register(
-			this.rootContainer.resolve(ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL) as Record<
-				string,
-				Awilix.Resolver<any>
-			>,
-		);
-
-		return container;
-	}
-
-	private initializeRootProviders(): void {
-		const rootProvidersModule: M = {
-			name: "RootProvidersModule",
-			providers: this.options.rootProviders || {},
-		};
-
-		Object.entries(this.sorter.sortByDependencies(rootProvidersModule)).forEach(
-			([key, provider]) => {
-				this.rootContainer.register({
-					[key]: this.resolveProvider({
-						provider,
-						resolutionScope: this.rootContainer,
-						module: rootProvidersModule,
-					}),
-				});
-			},
-		);
-
-		const wrappedResolvers = Object.entries(
-			rootProvidersModule.providers || {},
-		).reduce<Record<string, Awilix.Resolver<any>>>((acc, [key, provider]) => {
-			acc[key] = Awilix.asFunction(
-				() => this.rootContainer.resolve(key),
-				this.extractResolverOptions(rootProvidersModule, provider),
-			);
-
-			return acc;
-		}, {});
-
-		this.rootContainer.register({
-			[ROOT_PROVIDERS_RESOLVER_MAP_SYMBOL]: Awilix.asValue(wrappedResolvers),
-		});
+	private createContainer(): Awilix.AwilixContainer {
+		return Awilix.createContainer(this.options.containerOptions);
 	}
 
 	private registerModuleWithScope(
@@ -157,7 +108,7 @@ export class DIContext {
 			...this.resolveImports(m).map((module) => ({
 				...this.registerModuleWithScope(
 					module,
-					this.createContainerWithRootProviders(),
+					this.createContainer(),
 					[...moduleChain, m],
 					includeGlobalModules,
 				),
@@ -255,7 +206,7 @@ export class DIContext {
 		this.globalModulesWithScope = globalModules.map((module) => ({
 			...this.registerModuleWithScope(
 				module,
-				this.createContainerWithRootProviders(),
+				this.createContainer(),
 				[],
 				false,
 			),
@@ -523,15 +474,6 @@ export class DIContext {
 
 	private ensureNoProviderNameConflicts(m: M, includeGlobalModules = false) {
 		const moduleProviderKeys = Object.keys(m.providers || {});
-		const rootProviderKeys = Object.keys(this.options.rootProviders || {});
-
-		const rootConflicts = rootProviderKeys.filter((key) =>
-			moduleProviderKeys.includes(key),
-		);
-
-		if (rootConflicts.length > 0) {
-			throw new ERRORS.RootProviderNameConflictError(m.name, rootConflicts);
-		}
 
 		const importConflicts = [
 			...(includeGlobalModules

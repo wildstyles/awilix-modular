@@ -123,18 +123,17 @@ export const UserModule = createStaticModule<UserModuleDef>({
 
 ### 2. Register DiContext with created modules
 
-Create a DI context with common dependencies (like logger).
-Use `declare module` to make common dependencies globally available to all modules:
+Create a DI context and pass shared dependencies through a global module.
+Use `declare module` to make global dependencies available to all modules:
 
 ```typescript
 // app.module.ts
-import { DIContext } from "awilix-modular";
+import {
+  DIContext,
+  type InferGlobalDependencies,
+} from "awilix-modular";
 import { UserModule } from "./user.module";
-
-type CommonDeps = {
-  logger: Logger;
-  app: Express;
-};
+import { AppGlobalsModule, type AppGlobalsModuleDef } from "./app-globals.module";
 
 type AppModuleDef = ModuleDef<{
   imports: [typeof UserModule];
@@ -148,28 +147,25 @@ export const AppModule = createStaticModule<AppModuleDef>({
 // initialize your http framework instance
 const app = express();
 
-// Create DI context with root module and common dependencies
+// Create DI context with root module and global modules
 DIContext.create(AppModule, {
   framework: app,
-  rootProviders: {
-    app,
-    logger: Logger,
-  },
+  globalModules: [AppGlobalsModule.forRoot({ app, logger: Logger })],
 });
 
 // run your http framework service as usual
 app.listen(3000);
 
-// Extend CommonDependencies interface to make logger available globally
+// Extend GlobalDependencies to make global module exports available everywhere
 declare module "awilix-modular" {
-  interface CommonDependencies extends CommonDeps {}
+  interface GlobalDependencies extends InferGlobalDependencies<AppGlobalsModuleDef> {}
 }
 ```
 
 ### 3. Type-safe dependency injection in services
 
 Use `ModuleDef['deps']` to get automatic type inference for all available dependencies in your service constructors.  
-This includes module providers, imported module exports, module mediator instance(if query/command handlers registered) and common dependencies:
+This includes module providers, imported module exports, module mediator instance(if query/command handlers registered) and global dependencies:
 
 ```typescript
 // user.service.ts
@@ -181,7 +177,7 @@ class UserService {
     private readonly emailService: UserModuleDeps["emailService"],
     // From OrderModule providers
     private readonly orderService: UserModuleDeps["orderService"],
-    // From global root providers
+    // From global module exports
     private readonly logger: UserModuleDeps["logger"],
   ) {}
 }
@@ -190,7 +186,7 @@ class UserService {
 ### 4. Use controllers with any framework
 
 Route definition happens within `registerRoutes` controller method.
-It allows integration with **any HTTP framework** you pass as global dependency (Express, Fastify, Hono, Koa, etc.).  
+It allows integration with **any HTTP framework** you pass through global dependencies (Express, Fastify, Hono, Koa, etc.).  
 This is especially useful for gradually migrating existing applications to a modular architecture without a full rewrite
 
 ```typescript
@@ -202,7 +198,7 @@ import { UserModuleDeps } from "./user.module.ts";
 class UserController implements Controller {
   constructor(
     private readonly userService: UserModuleDeps["userService"],
-    // taken from global rootProviders
+    // taken from global module exports
     private readonly app: UserModuleDeps["app"],
   ) {}
   registerRoutes() {
@@ -577,9 +573,7 @@ import { AppModule } from "./modules";
 const app = fastify();
 
 DIContext.create(AppModule, {
-  rootProviders: {
-    app,
-  },
+  globalModules: [AppGlobalsModule.forRoot({ app })],
   framework: app,
   queryMediatorBuilder: new MediatorBuilder().build(),
 });

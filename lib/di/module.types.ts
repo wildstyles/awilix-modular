@@ -21,8 +21,8 @@ export type StaticModuleDef = {
 	providers?: DefProviderMap;
 	exports?: DefProviderMap;
 	imports?: ModuleImport[];
-	queryHandlers: readonly any[];
-	commandHandlers: readonly any[];
+	queryHandlers?: readonly any[];
+	commandHandlers?: readonly any[];
 	queryPreHandlers?: DefPreHandlerMap;
 	commandPreHandlers?: DefPreHandlerMap;
 	queryPreHandlerExports?: DefPreHandlerMap;
@@ -100,8 +100,20 @@ type ToModuleProviderMap<
 > = [keyof T] extends [never]
 	? EmptyObject
 	: {
-			[K in keyof T]: T[K] extends object ? Provider<T[K], DepsMap> : T[K];
+			[K in keyof T]: T[K] extends object
+				? Provider<T[K], DepsMap> | RawValueObject<T[K]>
+				: T[K];
 		};
+
+// Allow plain object values (e.g. framework instances) while rejecting
+// object literals that accidentally look like incomplete provider configs.
+type RawValueObject<T> = T & {
+	useClass?: never;
+	useFactory?: never;
+	provide?: never;
+	lifetime?: never;
+	allowCircular?: never;
+};
 
 // ============================================================================
 // Handlers
@@ -110,17 +122,25 @@ type ToModuleProviderMap<
 type WithHandlers<
 	Def extends StaticModuleDef,
 	TKind extends keyof HandlerKindMap,
-> = Def[HandlerKindMap[TKind]["handlersKey"]] extends readonly []
-	? {
-			[K in HandlerKindMap[TKind]["handlersKey"]]?: ToModuleHandlerArray<
-				Def[HandlerKindMap[TKind]["handlersKey"]]
-			>;
-		}
-	: {
-			[K in HandlerKindMap[TKind]["handlersKey"]]: ToModuleHandlerArray<
-				Def[HandlerKindMap[TKind]["handlersKey"]]
-			>;
-		};
+> =
+	ResolveHandlerArray<Def, TKind> extends readonly []
+		? {
+				[K in HandlerKindMap[TKind]["handlersKey"]]?: ToModuleHandlerArray<
+					ResolveHandlerArray<Def, TKind>
+				>;
+			}
+		: {
+				[K in HandlerKindMap[TKind]["handlersKey"]]: ToModuleHandlerArray<
+					ResolveHandlerArray<Def, TKind>
+				>;
+			};
+
+type ResolveHandlerArray<
+	Def extends StaticModuleDef,
+	TKind extends keyof HandlerKindMap,
+> = Def[HandlerKindMap[TKind]["handlersKey"]] extends readonly any[]
+	? Def[HandlerKindMap[TKind]["handlersKey"]]
+	: readonly [];
 
 type ToModuleHandlerArray<T extends readonly any[]> = T extends readonly []
 	? readonly []
