@@ -44,6 +44,7 @@ export type MiddlewareContract<
 	returnType: ReturnType;
 	requires: ExtractRequiredKeysTupleFromContracts<RequiredContracts>;
 	context: MergeContextFromContracts<RequiredContracts>;
+	executionContext: ExecutionContext;
 };
 
 type ExtractRequiredKeysTupleFromContracts<

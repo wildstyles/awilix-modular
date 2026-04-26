@@ -2,7 +2,6 @@ import {
 	type Middleware,
 	type MiddlewareContract,
 	Result,
-	type ExecutionContext,
 } from "awilix-modular";
 import { TenantNotFoundError } from "@/errors.js";
 
@@ -20,8 +19,8 @@ export class TenantMiddleware implements Middleware {
 
 	async execute(
 		payload: unknown,
-		context: Record<string, unknown>,
-		executionContext: ExecutionContext,
+		context: this["contract"]["context"],
+		executionContext: this["contract"]["executionContext"],
 	): Promise<ReturnType> {
 		// Simulate tenant lookup from context or executionContext
 		const userId = (context as any).userId || "unknown";

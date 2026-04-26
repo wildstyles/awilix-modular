@@ -2,7 +2,6 @@ import {
 	type Middleware,
 	type MiddlewareContract,
 	Result,
-	ExecutionContext,
 } from "awilix-modular";
 import { UnauthorizedError } from "@/errors.js";
 
@@ -20,7 +19,7 @@ export class CatsAuthMiddleware implements Middleware<Contract> {
 	async execute(
 		payload: unknown,
 		context: Contract["context"], // = {}
-		executionContext: ExecutionContext,
+		executionContext: Contract["executionContext"],
 	): Promise<ReturnType> {
 		// Read from executionContext (immutable, from HTTP layer)
 		const token = executionContext.token;

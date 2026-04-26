@@ -7,6 +7,10 @@ import { HandlerProcessor } from "./handler-processor.js";
 import type { AnyModule as M } from "./module.types.js";
 import type { AnyMiddleware, AnyProvider } from "./provider.types.js";
 import { ProviderDependencySorter } from "./provider-dependency-sorter.js";
+import {
+	getOrCreateRequestScope,
+	resolveFromRequestScope,
+} from "./request-scope-context.js";
 import * as GUARGS from "./type-guards.js";
 
 export interface DiContextOptions {
@@ -309,7 +313,7 @@ export class DIContext {
 					}),
 				});
 
-				resolverMap.set(key, () => scope.resolve(symbol));
+				resolverMap.set(key, () => resolveFromRequestScope(scope, symbol));
 				ownerByKey.set(key, importedModule.name);
 			}
 		}
@@ -334,7 +338,7 @@ export class DIContext {
 				}),
 			});
 
-			resolverMap.set(key, () => scope.resolve(symbol));
+			resolverMap.set(key, () => resolveFromRequestScope(scope, symbol));
 			ownerByKey.set(key, m.name);
 		}
 
@@ -408,7 +412,7 @@ export class DIContext {
 					return resolver.resolve(
 						resolverOptions.lifetime === Awilix.Lifetime.SINGLETON
 							? resolutionScope
-							: resolutionScope.createScope(),
+							: getOrCreateRequestScope(resolutionScope),
 					);
 				}, resolverOptions)
 			: resolver;

@@ -2,7 +2,6 @@ import {
 	type Middleware,
 	type MiddlewareContract,
 	Result,
-	ExecutionContext,
 } from "awilix-modular";
 import { LoggerError } from "@/errors.js";
 import type { CatsAuthMiddleware } from "./cats-auth.middleware.js";
@@ -14,9 +13,7 @@ type Contract = MiddlewareContract<
 	[CatsAuthMiddleware["contract"]]
 >;
 
-export class CatsLoggingMiddleware
-	implements Middleware<Contract>
-{
+export class CatsLoggingMiddleware implements Middleware<Contract> {
 	static readonly key = "logging";
 	readonly requires = ["auth"] as const;
 
@@ -25,7 +22,7 @@ export class CatsLoggingMiddleware
 	async execute(
 		payload: unknown,
 		context: Contract["context"],
-		executionContext: ExecutionContext,
+		executionContext: Contract["executionContext"],
 	): Promise<ReturnType> {
 		// Read from executionContext (immutable, from HTTP layer)
 		const token = executionContext.token;

@@ -1,3 +1,4 @@
+import { runInRequestScopeContext } from "../di/request-scope-context.js";
 import type { AnyContract } from "./contract.types.js";
 import * as errors from "./errors.js";
 import type { Executor, ExtractPayload } from "./handler.types.js";
@@ -11,7 +12,7 @@ import type {
 import type {
 	AnyContext,
 	ExecutionContext,
-	MiddlewareResolver,
+	Middleware,
 	MiddlewareResolverMap,
 } from "./middleware.types.js";
 import { Result, type Result as ResultType } from "./result.js";
@@ -58,44 +59,48 @@ export class Mediator<C extends AnyContract> {
 		payload: ExtractPayload<C, K>,
 		options?: ExecuteRuntimeOptions<C, K>,
 	): Promise<unknown> {
-		const keyStr = String(key);
-		const executor = this.handlers.get(keyStr);
+		return runInRequestScopeContext(async () => {
+			const keyStr = String(key);
+			const executor = this.handlers.get(keyStr);
 
-		if (!executor) {
-			throw new errors.HandlerNotRegisteredError(keyStr, this.moduleName);
-		}
+			if (!executor) {
+				throw new errors.HandlerNotRegisteredError(keyStr, this.moduleName);
+			}
 
-		const { executionContext, includePreHandlerKeys, excludePreHandlerKeys } =
-			options ?? {};
+			const { executionContext, includePreHandlerKeys, excludePreHandlerKeys } =
+				options ?? {};
 
-		const applicableMiddlewares = this.filterMiddlewareResolvers({
-			excludePreHandlerKeys,
-			includePreHandlerKeys,
+			const applicableMiddlewares = this.resolveApplicableMiddlewares({
+				excludePreHandlerKeys,
+				includePreHandlerKeys,
+			});
+
+			const middlewareResult = await this.executeMiddlewares(
+				applicableMiddlewares,
+				payload,
+				executionContext ?? {},
+			);
+
+			if (middlewareResult.type === "error") {
+				return middlewareResult.error as unknown;
+			}
+
+			const handlerResult = await executor(payload, middlewareResult.context);
+
+			if (middlewareResult.hasResultMiddleware) {
+				return (
+					this.isResult(handlerResult)
+						? handlerResult
+						: Result.ok(handlerResult)
+				) as unknown;
+			}
+
+			return handlerResult as unknown;
 		});
-
-		const middlewareResult = await this.executeMiddlewares(
-			applicableMiddlewares,
-			payload,
-			executionContext ?? {},
-		);
-
-		if (middlewareResult.type === "error") {
-			return middlewareResult.error as unknown;
-		}
-
-		const handlerResult = await executor(payload, middlewareResult.context);
-
-		if (middlewareResult.hasResultMiddleware) {
-			return (
-				this.isResult(handlerResult) ? handlerResult : Result.ok(handlerResult)
-			) as unknown;
-		}
-
-		return handlerResult as unknown;
 	}
 
 	private async executeMiddlewares(
-		middlewares: Array<[string, MiddlewareResolver]>,
+		middlewares: Array<[string, Middleware]>,
 		payload: unknown,
 		executionContext: ExecutionContext,
 	): Promise<
@@ -105,8 +110,8 @@ export class Mediator<C extends AnyContract> {
 		let context: AnyContext = {};
 		let hasResultMiddleware = false;
 
-		for (const [middlewareKey, resolver] of middlewares) {
-			const result = await resolver().execute(
+		for (const [middlewareKey, middleware] of middlewares) {
+			const result = await middleware.execute(
 				payload,
 				context,
 				executionContext,
@@ -158,10 +163,10 @@ export class Mediator<C extends AnyContract> {
 		};
 	}
 
-	private filterMiddlewareResolvers(options?: {
+	private resolveApplicableMiddlewares(options?: {
 		includePreHandlerKeys?: readonly string[];
 		excludePreHandlerKeys?: readonly string[];
-	}): Array<[string, MiddlewareResolver]> {
+	}): Array<[string, Middleware]> {
 		const { includePreHandlerKeys = [], excludePreHandlerKeys = [] } =
 			options ?? {};
 
@@ -179,18 +184,21 @@ export class Mediator<C extends AnyContract> {
 			},
 		);
 
-		this.ensureMiddlewareDependencies(filtered);
+		const resolvedMiddlewares = filtered.map<[string, Middleware]>(
+			([key, resolver]) => [key, resolver()],
+		);
 
-		return filtered;
+		this.ensureMiddlewareDependencies(resolvedMiddlewares);
+
+		return resolvedMiddlewares;
 	}
 
 	private ensureMiddlewareDependencies(
-		middlewares: Array<[string, MiddlewareResolver]>,
+		middlewares: Array<[string, Middleware]>,
 	): void {
 		const processedKeys: string[] = [];
 
-		for (const [key, resolver] of middlewares) {
-			const middleware = resolver();
+		for (const [key, middleware] of middlewares) {
 			const requires = middleware.requires || [];
 
 			for (const requiredKey of requires) {

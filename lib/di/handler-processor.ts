@@ -6,6 +6,7 @@ import type { MiddlewareResolverMap } from "../mediator/middleware.types.js";
 import * as ERRORS from "./errors.js";
 import type { AnyModule as M } from "./module.types.js";
 import type { ClassHandler } from "./provider.types.js";
+import { getOrCreateRequestScope } from "./request-scope-context.js";
 import { isClassHandler } from "./type-guards.js";
 
 export const HandlerType = {
@@ -58,7 +59,7 @@ export class HandlerProcessor {
 				const requestScope =
 					options.lifetime === Awilix.Lifetime.SINGLETON
 						? scope
-						: scope.createScope();
+						: getOrCreateRequestScope(scope);
 
 				return requestScope.resolve(handlerSymbol);
 			};

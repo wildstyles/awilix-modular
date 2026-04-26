@@ -17,6 +17,10 @@ import type { DiContextOptions } from "./di-context.js";
 import * as ERRORS from "./errors.js";
 import type { AnyModule as M } from "./module.types.js";
 import type { ConstructorController, Controller } from "./provider.types.js";
+import {
+	resolveFromRequestScope,
+	runInRequestScopeContext,
+} from "./request-scope-context.js";
 import { isClassController } from "./type-guards.js";
 
 type RouteRegistrationParams = {
@@ -128,7 +132,7 @@ export class ControllerProcessor {
 		scope: Awilix.AwilixContainer,
 		withNewScope: boolean,
 	): Controller {
-		if (withNewScope) return scope.createScope().resolve(symbol);
+		if (withNewScope) return resolveFromRequestScope(scope, symbol);
 
 		return scope.resolve(symbol);
 	}
@@ -154,7 +158,9 @@ export class ControllerProcessor {
 		routeState.verbs.forEach((verb) => {
 			routeState.paths.forEach((path) => {
 				const handler = async (request: any, reply: any) => {
-					return resolve()[methodName](request, reply);
+					return runInRequestScopeContext(() =>
+						resolve()[methodName](request, reply),
+					);
 				};
 
 				const beforeMiddleware = this.beforeRouteRegistered?.({
