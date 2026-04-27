@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/wildstyles/awilix-modular/workflows/ci/badge.svg)](https://github.com/wildstyles/awilix-modular/actions)
 [![codecov](https://codecov.io/gh/wildstyles/awilix-modular/branch/main/graph/badge.svg)](https://codecov.io/gh/wildstyles/awilix-modular)
 
-A type-safe, modular DI and CQRS library on top of [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture with powerful CQRS capabilities to any Node.js application.
+A type-safe, modular DI and CQRS framework on top of [Awilix](https://github.com/jeffijoe/awilix) that brings NestJS-like module architecture with powerful CQRS capabilities to any Node.js application.
 
 🚀 **includes native ES decorators (TC39 Stage 3) for routing - no `reflect-metadata` or `experimentalDecorators` required!**
 
@@ -24,11 +24,13 @@ A type-safe, modular DI and CQRS library on top of [Awilix](https://github.com/j
   - [Configuring Provider Options](#configuring-provider-options)
   - [Scoped Controllers](#scoped-controllers)
 - [CQRS Pattern Support](#cqrs-pattern-support)
+- [Mediator Pre-Handlers, Scenarios, and Context Inference](#mediator-pre-handlers-scenarios-and-context-inference)
 - [Native ES Decorator-Based Routing](#native-es-decorator-based-routing)
 - [OpenAPI/Swagger Integration](#openapiswagger-integration)
 - [Type-Safe Request/Response](#type-safe-requestresponse)
 - [HTTP Exception Handling](#http-exception-handling)
 - [Dynamic Modules](#dynamic-modules)
+- [Global Modules](#global-modules)
 - [Circular Dependencies](#circular-dependencies)
 - [Why awilix-modular?](#why-awilix-modular)
   - [The Problem](#the-problem)
@@ -63,9 +65,6 @@ pnpm add awilix-modular awilix
 ## Quick Start
 
 This guide demonstrates building a modular application with `OrderModule` and `UserModule`, showing how modules import each other and share dependencies with full type safety.
-
-> [!TIP]
-> For more complete examples including CQRS patterns, circular dependencies, and framework integrations, see the [examples folder](./examples).
 
 ### 1. Create modules with their definitions
 
@@ -127,13 +126,52 @@ Create a DI context and pass shared dependencies through a global module.
 Use `declare module` to make global dependencies available to all modules:
 
 ```typescript
-// app.module.ts
+// app-globals.module.ts
 import {
-  DIContext,
+  createDynamicModule,
+  type ModuleDef,
   type InferGlobalDependencies,
 } from "awilix-modular";
+import type { Express } from "express";
+
+export type AppGlobalsModuleDef = ModuleDef<{
+  providers: {
+    app: Express;
+  };
+  exportKeys: "app";
+  forRootConfig: {
+    app: Express;
+  };
+}>;
+
+export const AppGlobalsModule = createDynamicModule<AppGlobalsModuleDef>(
+  (config) => ({
+    name: "AppGlobalsModule",
+    providers: {
+      app: config.app,
+    },
+    exports: {
+      app: config.app,
+    },
+  }),
+);
+
+// Extend GlobalDependencies to make global module exports available everywhere
+declare module "awilix-modular" {
+  interface GlobalDependencies extends InferGlobalDependencies<AppGlobalsModuleDef> {}
+}
+```
+
+`globalModules` are registered once at `DIContext.create(...)` and their exports become available in every module without explicitly importing them.
+
+```typescript
+// app.module.ts
+import { DIContext } from "awilix-modular";
 import { UserModule } from "./user.module";
-import { AppGlobalsModule, type AppGlobalsModuleDef } from "./app-globals.module";
+import {
+  AppGlobalsModule,
+  type AppGlobalsModuleDef,
+} from "./app-globals.module";
 
 type AppModuleDef = ModuleDef<{
   imports: [typeof UserModule];
@@ -150,16 +188,11 @@ const app = express();
 // Create DI context with root module and global modules
 DIContext.create(AppModule, {
   framework: app,
-  globalModules: [AppGlobalsModule.forRoot({ app, logger: Logger })],
+  globalModules: [AppGlobalsModule.forRoot({ app })],
 });
 
 // run your http framework service as usual
 app.listen(3000);
-
-// Extend GlobalDependencies to make global module exports available everywhere
-declare module "awilix-modular" {
-  interface GlobalDependencies extends InferGlobalDependencies<AppGlobalsModuleDef> {}
-}
 ```
 
 ### 3. Type-safe dependency injection in services
@@ -178,7 +211,7 @@ class UserService {
     // From OrderModule providers
     private readonly orderService: UserModuleDeps["orderService"],
     // From global module exports
-    private readonly logger: UserModuleDeps["logger"],
+    private readonly app: UserModuleDeps["app"],
   ) {}
 }
 ```
@@ -476,7 +509,7 @@ app.get("/users/:id", async (req, res) => {
     {
       userId: req.params.id,
     },
-    req.context,
+    { executionContext: req.context },
   );
   res.json(result);
 });
@@ -485,10 +518,12 @@ app.get("/users/:id", async (req, res) => {
 **Strict Contract in One Place**: Each handler defines its contract (key, payload, response) in a single location, making it easy to understand what data flows through your system:
 
 ```typescript
+import type { QueryContract } from "awilix-modular";
+
 export class GetUserQueryHandler {
-  static key = "users/get-user"; // Unique identifier
-  static contract: Contract<
-    typeof GetUserQueryHandler.key,
+  readonly key = "users/get-user"; // Unique identifier
+  declare readonly contract: QueryContract<
+    "users/get-user",
     { userId: string }, // Input shape
     User // Output shape
   >;
@@ -509,10 +544,10 @@ export class GetUserQueryHandler {
 
 ### Defining Query Handlers
 
-Create handlers that implement the `Handler<Contract>` interface with a unique key and executor function:
+Create handlers that implement the `Handler<QueryContract<...>>` interface with a unique key and executor function:
 
 ```typescript
-import { type Contract, type Handler } from "awilix-modular";
+import { type Handler, type QueryContract } from "awilix-modular";
 import type { UserModuleDeps } from "./user.module";
 
 // Define payload and response types
@@ -520,10 +555,10 @@ type Payload = { userId: string };
 type Response = { id: string; role: "admin" | "user" };
 
 export class GetUserQueryHandler implements Handler<
-  typeof GetUserQueryHandler.contract
+  GetUserQueryHandler["contract"]
 > {
-  static key = "users/get-user";
-  static contract: Contract<typeof GetUserQueryHandler.key, Payload, Response>;
+  readonly key = "users/get-user";
+  declare readonly contract: QueryContract<"users/get-user", Payload, Response>;
 
   constructor(private readonly userService: UserModuleDeps["userService"]) {}
 
@@ -558,27 +593,6 @@ export const UserModule = createStaticModule<UserModuleDef>({
 });
 ```
 
-> [!IMPORTANT]
-> Adding `queryHandlers` to `ModuleDef` enables the per-module mediator to be fully type-safe. The mediator will know exactly which query keys are available and their payload/response types.
-
-### Initializing the Query Mediator
-
-Set up the `MediatorBuilder` during application bootstrap:
-
-```typescript
-import fastify from "fastify";
-import { DIContext, MediatorBuilder } from "awilix-modular";
-import { AppModule } from "./modules";
-
-const app = fastify();
-
-DIContext.create(AppModule, {
-  globalModules: [AppGlobalsModule.forRoot({ app })],
-  framework: app,
-  queryMediatorBuilder: new MediatorBuilder().build(),
-});
-```
-
 ### Executing Queries
 
 Execute queries from controllers using query mediator:
@@ -592,7 +606,7 @@ class UserController {
   registerRoutes() {
     app.get("/users/:id", async (req, res) => {
       // full typesafety from handler contract without depending on implementation!
-      const user = await app.queryMediator.execute("users/get-user", {
+      const user = await this.queryMediator.execute("users/get-user", {
         userId: req.params.id,
       });
       res.send(user);
@@ -601,224 +615,212 @@ class UserController {
 }
 ```
 
-### Mediator Middlewares
+## Mediator Pre-Handlers, Scenarios, and Context Inference
 
-Mediator middlewares provide a powerful, type-safe way to intercept and process queries/commands before they reach handlers. This allows you to move cross-cutting concerns like **authentication, role checking...** from the HTTP framework layer to the application layer.
+Pre-handlers run before query/command handlers and are declared with global modules or at module level via `queryPreHandlers` / `commandPreHandlers`.
+Think of each pre-handler as a provider with its own execution rules. This lets you apply the same modular DI system to business logic that usually lives in framework middlewares (including Nest-style guards).
 
-#### Why Mediator Middlewares?
+### ExecutionContext vs Context
 
-Traditional approach couples business logic to the HTTP framework:
-
-```typescript
-// ❌ Framework-coupled approach
-app.get("/users/:id", authMiddleware, async (req, res) => {
-  if (!req.user.hasPermission("users:read")) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  const user = await userService.getUser(req.params.id);
-  res.json(user);
-});
-```
-
-With mediator middlewares, application logic is **framework-agnostic** and happens in two layers:
-
-**1. Framework middleware extracts HTTP data:**
+- **`executionContext`**: immutable runtime data passed to `mediator.execute(...)` usually from HTTP's framework request (auth token, tenant header, etc.). It's handled only by Pre-Handlers
+- **`context`**: mutable handler context built by pre-handlers and passed to the handler
 
 ```typescript
-// Extract HTTP-specific data (Fastify example)
-import type { FastifyRequest, FastifyReply } from "fastify";
+import type { ExecutionContext } from "awilix-modular";
 
-export interface RequestContext {
-  token?: string; // Authorization header
-  requestId: string; // Request ID
-  ip: string; // Client IP
-}
-
-async function extractRequestContext(
-  req: FastifyRequest,
-  _reply: FastifyReply,
-) {
-  // Extract only what's needed - no business logic here
-  req.context = {
-    token: req.headers.authorization,
-    requestId: req.id,
-    ip: req.ip,
-  };
-}
-
-// Register framework middleware
-app.addHook("onRequest", extractRequestContext);
-```
-
-**2. Mediator middlewares handle application logic:**
-
-```typescript
-// ✅ Framework-agnostic approach
-app.get("/users/:id", async (req, res) => {
-  // Pass execution context (immutable HTTP data) to mediator
-  const result = await queryMediator.execute(
-    "users/get-user",
-    { userId: req.params.id },
-    req.context, // executionContext from framework middleware
-  );
-
-  res.json(result);
-});
-```
-
-#### Creating Type-Safe Middlewares
-
-Mediator middlewares receive two important parameters:
-
-- **`executionContext`** - Immutable data from the HTTP layer (token, requestId, ip, etc.)
-- **`context`** - Mutable application context built by the middleware pipeline
-
-```typescript
-import type { MiddlewareConfig } from "awilix-modular";
-import { MediatorBuilder } from "awilix-modular";
-
-// 1. Auth middleware - reads from executionContext, writes to context
-export const authMiddleware: MiddlewareConfig<"auth"> = {
-  tag: "auth", // basically name of middleware
-  execute: async (payload, context, executionContext, next) => {
-    // Read from executionContext (immutable, from HTTP layer)
-    const token = executionContext.token;
-
-    // In real app: verify JWT token
-    // const user = await verifyJWT(token);
-    const user = {
-      userId: "user-123",
-      roles: ["admin", "user"],
-    };
-
-    // Write to context (mutable, built by middlewares)
-    return next(payload, {
-      ...context,
-      ...user, // Add userId and roles to context
-    });
-  },
-};
-
-// 2. Tenant middleware - DEPENDS on auth middleware
-export const tenantMiddleware: MiddlewareConfig<"tenant", "auth"> = {
-  tag: "tenant",
-  requires: "auth", // ✅ Type-safe dependency on auth middleware!
-  execute: async (payload, context, executionContext, next) => {
-    // context is now typed! It has userId and roles from auth middleware
-    console.log(
-      `[Tenant Middleware] User ${context.userId} with roles ${context.roles.join(", ")}`,
-    );
-
-    // In real app: extract tenant from subdomain or header
-    const tenant = {
-      tenantId: "tenant-456",
-      tenantName: "Acme Corp",
-    };
-
-    // ✅ next() now REQUIRES both auth context AND tenant context!
-    return next(payload, {
-      ...context, // auth properties: userId, roles
-      ...tenant, // tenant properties: tenantId, tenantName (REQUIRED!)
-    });
-  },
-};
-
-// 4. Build mediator with middlewares
-const queryMediatorBuilder = new MediatorBuilder()
-  .use(authMiddleware)
-  .use(tenantMiddleware) // Will run AFTER auth (dependency enforced)
-  .build();
-
-DIContext.create(AppModule, {
-  queryMediatorBuilder,
-});
-
-// 5. Augment types to make middleware context globally available
 declare module "awilix-modular" {
-  // Define what each middleware adds to context
-  interface MiddlewareTagRegistry {
-    auth: { userId: string; roles: string[] };
-    tenant: { tenantId: string; tenantName: string };
+  interface ExecutionContext {
+    token?: string;
+    tenantName: string;
   }
-
-  // Define execution context shape (from framework middleware)
-  interface ExecutionContext extends RequestContext {}
 }
+
+await queryMediator.execute(
+  "users/get",
+  { userId: "u-1" },
+  { executionContext: { token: "jwt", tenantName: "asus" } },
+);
 ```
 
-> [!IMPORTANT]
-> **Type Augmentation**: Use `declare module "awilix-modular"` to define:
->
-> - **`MiddlewareTagRegistry`** - Defines what each middleware adds to the context
-> - **`ExecutionContext`** - Defines the shape of immutable data from framework middleware
->
-> This enables full TypeScript autocomplete and type checking in handlers!
+### Define Pre-Handlers
 
-**Key Benefits:**
+Pre-handlers can depend on other pre-handlers via `requires`.  
+Execution order is restricted: a middleware must run only after all dependencies in `requires` are already processed.
+If the order is invalid, mediator throws `MiddlewareRequiredError`.
 
-- **Separation of Concerns**: Framework middleware extracts HTTP data; mediator middlewares handle application logic
-- **Type Safety**: Middleware dependencies are enforced at compile time and run time with `requires`
-- **Context Flow**: `executionContext` (immutable) → middleware pipeline → `context` (mutable) → handler
-- **Framework Agnostic**: Application logic isn't coupled to Express/Fastify/etc.
+Context for pre-handler is calculated from required `MiddlewareContract`'s:
 
-#### Tagging Handlers
-
-Tag handlers to apply middlewares selectively using `middlewareTags` and `excludeMiddlewareTags`. Use the `ContextFromTags` utility to get proper type for context in handle executors:
+- `AuthMiddleware` adds `{ userId: string }`
+- `TenantMiddleware` depends on `AuthMiddleware`, so its input `context` is inferred as `{ userId: string }`
 
 ```typescript
 import {
-  type Handler,
-  type Contract,
-  type ContextFromTags,
+  Result,
+  type Middleware,
+  type MiddlewareContract,
 } from "awilix-modular";
 
-type Payload = { userId: string };
-type Response = User;
+class UnauthorizedError extends Error {}
+class TenantNotFoundError extends Error {}
 
-export class GetUserQueryHandler implements Handler<
-  typeof GetUserQueryHandler.contract
-> {
-  static readonly key = "users/get-user";
-  static contract: Contract<typeof GetUserQueryHandler.key, Payload, Response>;
+class AuthMiddleware implements Middleware {
+  declare readonly contract: MiddlewareContract<
+    "auth",
+    Result<{ userId: string }, UnauthorizedError>
+  >;
+  // context and it's type is empty({}) for isolation, executionContext is available
+  // for each middleware
+  async execute(_payload, _context, executionContext) {
+    if (!executionContext.token) return Result.error(new UnauthorizedError());
 
-  // Single source of truth - all middleware types are inferred from this
-  // by default oll middlewares are applied to handler
-  readonly middlewareTags = ["auth", "logging"] as const;
-  readonly excludeMiddlewareTags = [] as const;
+    return Result.ok({ userId: "u-1" });
+  }
+}
 
-  constructor(private readonly userService: UserModuleDeps["userService"]) {}
+class TenantMiddleware implements Middleware {
+  readonly requires = ["auth"] as const;
+  declare readonly contract: MiddlewareContract<
+    "tenant",
+    Result<{ tenantId: string }, TenantNotFoundError>,
+    [AuthMiddleware["contract"]]
+  >;
 
-  async executor(
-    payload: Payload,
-    // if no generic params passed ContextFromTags type includes all middleware params
-    context: ContextFromTags<
-      typeof this.middlewareTags,
-      typeof this.excludeMiddlewareTags
-    >,
-  ): Promise<Response> {
-    // context is fully typed! TypeScript knows it has:
-    // - userId, roles (from auth middleware)
-    // - requestId, timestamp (from logging middleware)
-    console.log(
-      `[Handler] User ${context.userId} is fetching user ${payload.userId}`,
-    );
+  // context has success path from AuthMiddleware: { userId: string }
+  async execute(_payload, context, executionContext) {
+    const userId = context.userId; // string
 
-    return this.userService.getUser(payload.userId);
+    if (!executionContext.tenantName)
+      return Result.error(new TenantNotFoundError());
+
+    return Result.ok({ tenantId: "t-1" });
   }
 }
 ```
 
-> [!TIP]
-> **`ContextFromTags` utility**: Automatically infers the context type based on included and excluded middleware tags. This gives you full TypeScript autocomplete and type safety without manually defining context shapes!
+### Handler Context, Return Type, and Error Merging
+
+Handler `context` is calculated from active pre-handlers.
 
 > [!NOTE]
-> **Understanding `executionContext` vs `context`:**
->
-> - **`executionContext`**: Immutable data extracted from HTTP request (token, IP, headers, etc.). Created by framework middleware, never modified by mediator middlewares.
-> - **`context`**: Mutable application context built through the middleware pipeline. Each middleware reads the previous context and returns an enhanced version with additional data.
->
-> This separation ensures HTTP concerns stay in the framework layer while application logic lives in mediator middlewares.
+> In this example, `AuthMiddleware` and `TenantMiddleware` are assumed to be registered globally via a global module (`globalModules` in `DIContext.create(...)`).
+
+With `AuthMiddleware` + `TenantMiddleware`, handler context includes both `userId` and `tenantId`.
+If middlewares return `Result`, their error types are merged into handler `returnType`.
+
+```typescript
+import { type Handler, type QueryContract, Result } from "awilix-modular";
+import type { UsersModuleDef } from "./users.module";
+
+class HandlerError extends Error {}
+type Response = Result<{ id: string }, HandlerError>;
+
+export class GetUserHandler implements Handler<GetUserHandler["contract"]> {
+  readonly key = "users/get";
+  declare readonly contract: QueryContract<
+    "users/get",
+    { userId: string },
+    Response
+  >;
+
+  async executor(
+    payload: { userId: string },
+    context: this["contract"]["context"],
+  ) {
+    // context is inferred from pre-handlers:
+    // context.userId   -> from AuthMiddleware
+    // context.tenantId -> from TenantMiddleware
+    return Result.ok({ id: payload.userId });
+  }
+}
+```
+
+From the controller side, merged errors are also inferred!
+
+```typescript
+const result = await this.queryMediator.execute("users/get", {
+  userId: req.params.id,
+});
+// result: Result<{ id: string }, HandlerError | UnauthorizedError | TenantNotFoundError>
+```
+
+> [!NOTE]
+> If at least one active pre-handler returns `Result`, contract `returnType` is merged into `Result<Success, HandlerError | MiddlewareErrors>`.
+> If no pre-handler returns `Result`, the plain handler response type is preserved.
+
+### Scenarios and Context Calculation
+
+Scenarios allow per-call middleware selection while keeping types strict.
+Both handler `context` and `execute(...)` return type are recalculated per scenario.
+
+- `includePreHandlerKeys`: pick exact pre-handlers for this scenario
+- `excludePreHandlerKeys`: remove specific pre-handlers from default/full set
+- controller must pass `scenario` and its required settings
+
+```typescript
+class HandlerError extends Error {}
+
+type Response = Result<{ id: string }, HandlerError>;
+
+// Assume:
+// - auth pre-handler adds { userId: string } and can return UnauthorizedError
+// - tenant pre-handler adds { tenantId: string } and can return TenantNotFoundError
+declare readonly contract: QueryContract<
+  "users/get",
+  { userId: string },
+  Response,
+  | { name: "default" }
+  | { name: "auth-only"; includePreHandlerKeys: ["auth"] },
+>;
+
+// In handler, context is a union by scenario:
+// { userId: string; tenantId: string } | { userId: string }
+async executor(payload, context: this["contract"]["context"]) {
+  if ("tenantId" in context) {
+    // default scenario branch
+    console.log(context.tenantId);
+  }
+}
+
+// In controller, scenario options are required and affect return type
+const full = await this.queryMediator.execute("users/get", { userId: "u-1" }, {
+  scenario: "default",
+});
+// full: Result<
+//   { id: string },
+//   HandlerError | UnauthorizedError | TenantNotFoundError
+// >
+
+const authOnly = await this.queryMediator.execute(
+  "users/get",
+  { userId: "u-1" },
+  {
+    scenario: "auth-only",
+    includePreHandlerKeys: ["auth"] , // required by scenario config
+  },
+);
+// authOnly: Result<{ id: string }, HandlerError | UnauthorizedError>
+
+// ❌ TS error (missing required includePreHandlerKeys for "auth-only" scenario):
+// await this.queryMediator.execute("users/get", { userId: "u-1" }, { scenario: "auth-only" });
+```
+
+### Global Pre-Handler Inference
+
+You can define global query/command pre-handlers once and have their context/errors inferred in all contracts:
+
+```typescript
+import type {
+  InferGlobalCommandPreHandlers,
+  InferGlobalQueryPreHandlers,
+} from "awilix-modular";
+import type { AppGlobalsModuleDef } from "./app-globals.module";
+
+declare module "awilix-modular" {
+  interface GlobalQueryPreHandlers extends InferGlobalQueryPreHandlers<AppGlobalsModuleDef> {}
+
+  interface GlobalCommandPreHandlers extends InferGlobalCommandPreHandlers<AppGlobalsModuleDef> {}
+}
+```
 
 ## Native ES Decorator-Based Routing
 
@@ -1322,6 +1324,34 @@ export const AppModule = createStaticModule<AppModuleDef>({
 });
 ```
 
+## Global Modules
+
+Global modules let you register shared exports once and make them available to all modules without explicit imports.
+They are passed to `DIContext.create(...)` via `globalModules`.
+
+```typescript
+import { DIContext, type InferGlobalDependencies } from "awilix-modular";
+import { AppModule } from "./app.module";
+import {
+  AppGlobalsModule,
+  type AppGlobalsModuleDef,
+} from "./app-globals.module";
+
+DIContext.create(AppModule, {
+  framework: app,
+  globalModules: [AppGlobalsModule.forRoot({ app, logger: Logger })],
+});
+
+declare module "awilix-modular" {
+  interface GlobalDependencies extends InferGlobalDependencies<AppGlobalsModuleDef> {}
+}
+```
+
+Use global modules for cross-cutting infrastructure dependencies (app instance, logger, config, pre-handlers) that should be accessible in every module.
+
+> [!IMPORTANT]
+> Global modules must be leaf modules (no `imports`). They can export providers and pre-handlers, and those exports participate in normal type inference.
+
 ## Circular Dependencies
 
 Awilix-modular supports circular dependencies between providers and modules using `allowCircular` and `forwardRef` utilities.
@@ -1560,6 +1590,6 @@ class UserService {
 
 **Mediator as a Gateway**: The mediator pattern provides a clean abstraction between HTTP infrastructure and application logic. Controllers don't call services directly—they execute contracts through the mediator. This indirection enables powerful middleware pipelines (auth, logging, validation) to run consistently for all operations without coupling them to the HTTP layer.
 
-**Contracts Over Implementation**: Handlers expose contracts (key + payload + response), not implementation details. Controllers and other consumers depend on these contracts, not concrete classes. This makes refactoring easier—you can change handler internals without touching consumers, as long as the contract remains stable.
+**Contracts Over Implementation**: Handlers expose contracts (key + payload + response), not implementation details. Controllers and other consumers depend on these contracts, not concrete classes.
 
 **Future-Proof**: Built on native ES Stage 3 decorators and standard JavaScript. No experimental features or polyfills required.

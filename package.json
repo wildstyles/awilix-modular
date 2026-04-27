@@ -1,6 +1,6 @@
 {
 	"name": "awilix-modular",
-	"description": "Wrapper over awilix to build nest.js similiar modules with strict type safety",
+	"description": "HTTP-framework-agnostic modular DI and CQRS framework for Awilix with Nest-like module patterns and strict type safety",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"version": "2.1.2",
@@ -40,7 +40,9 @@
 		"dependency-injection",
 		"di",
 		"modularization",
-		"awilix"
+		"awilix",
+		"cqrs",
+		"mediator"
 	],
 	"homepage": "https://github.com/wildstyles/awilix-modular",
 	"files": [
