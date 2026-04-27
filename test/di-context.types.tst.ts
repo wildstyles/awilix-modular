@@ -5,8 +5,8 @@ import type {
 	StaticModule as M,
 } from "../lib/di/module.types.js";
 import type {
-	GlobalDependencies,
 	ModuleDef as D,
+	GlobalDependencies,
 } from "../lib/di/module-def.types.js";
 import {
 	createDynamicModule,

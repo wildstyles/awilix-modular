@@ -21,23 +21,23 @@ type TestModuleScopeTree = Omit<ModuleScopeTree, "scope" | "importedScopes"> & {
 	importedScopes: Map<string, TestModuleScopeTree>;
 };
 
-describe("DIContext - CLASSIC Injection Mode - Circular Dependencies", () => {
-	function registerModule(
-		module: Partial<AnyModule>,
-		options?: Partial<DiContextOptions>,
-	): TestModuleScopeTree {
-		return DIContext.create(
-			{
-				name: "TestModule",
-				...module,
-			},
-			{
-				framework: {},
-				...options,
-			},
-		);
-	}
+function registerModule(
+	module: Partial<AnyModule>,
+	options?: Partial<DiContextOptions>,
+): TestModuleScopeTree {
+	return DIContext.create(
+		{
+			name: "TestModule",
+			...module,
+		},
+		{
+			framework: {},
+			...options,
+		},
+	);
+}
 
+describe("DIContext - CLASSIC Injection Mode - Circular Dependencies", () => {
 	class ServiceA {
 		public instanceId = Math.random();
 		constructor(private serviceB: any) {}
@@ -443,5 +443,108 @@ describe("DIContext - CLASSIC Injection Mode - Circular Dependencies", () => {
 			);
 			expect(newScopedA1.getB().instanceId).toBe(newScopedA2.getB().instanceId);
 		});
+	});
+});
+
+describe("DIContext - CLASSIC Injection Mode - globalModules", () => {
+	class GlobalService {
+		public instanceId = Math.random();
+	}
+
+	class ConsumerService {}
+
+	it("should support SINGLETON, TRANSIENT and SCOPED lifetimes for global module exports", () => {
+		const { scope } = registerModule(
+			{},
+			{
+				globalModules: [
+					{
+						name: "GlobalModule",
+						exports: {
+							singletonService: GlobalService,
+							transientService: {
+								useClass: GlobalService,
+								lifetime: Lifetime.TRANSIENT,
+							},
+							scopedService: {
+								useClass: GlobalService,
+								lifetime: Lifetime.SCOPED,
+							},
+						},
+					},
+				],
+			},
+		);
+
+		const singletonA = scope.resolve("singletonService");
+		const singletonB = scope.resolve("singletonService");
+		expect(singletonA.instanceId).toBe(singletonB.instanceId);
+
+		const transientA = scope.resolve("transientService");
+		const transientB = scope.resolve("transientService");
+		expect(transientA.instanceId).not.toBe(transientB.instanceId);
+
+		const scopedRootA = scope.resolve("scopedService");
+		const scopedRootB = scope.resolve("scopedService");
+		expect(scopedRootA.instanceId).toBe(scopedRootB.instanceId);
+
+		const childScope = scope.createScope<any>();
+
+		const singletonC = childScope.resolve("singletonService");
+		const scopedChildA = childScope.resolve("scopedService");
+		const scopedChildB = childScope.resolve("scopedService");
+
+		expect(singletonA.instanceId).toBe(singletonC.instanceId);
+		expect(scopedChildA.instanceId).toBe(scopedChildB.instanceId);
+		expect(scopedRootA.instanceId).not.toBe(scopedChildA.instanceId);
+	});
+
+	it("should throw when globalModules has duplicate module names", () => {
+		expect(() => {
+			registerModule(
+				{},
+				{
+					globalModules: [{ name: "SharedGlobal" }, { name: "SharedGlobal" }],
+				},
+			);
+		}).toThrow(ERRORS.DuplicateModuleImportError);
+	});
+
+	it("should throw when a global module has imports", () => {
+		expect(() => {
+			registerModule(
+				{},
+				{
+					globalModules: [
+						{
+							name: "InvalidGlobal",
+							imports: [{ name: "ImportedModule" }],
+						},
+					],
+				},
+			);
+		}).toThrow(ERRORS.GlobalModuleImportsNotAllowedError);
+	});
+
+	it("should throw when local providers conflict with global module exports", () => {
+		expect(() => {
+			registerModule(
+				{
+					providers: {
+						conflictService: ConsumerService,
+					},
+				},
+				{
+					globalModules: [
+						{
+							name: "GlobalModule",
+							exports: {
+								conflictService: GlobalService,
+							},
+						},
+					],
+				},
+			);
+		}).toThrow(ERRORS.ProviderNameConflictError);
 	});
 });

@@ -135,24 +135,27 @@ describe("DIContext", () => {
 			}).toThrow(ERRORS.MiddlewareNameConflictError);
 		});
 
-		it("should throw an error when local command pre-handler conflicts with imported exported command pre-handler", () => {
-			class ImportedCommandMiddleware extends TestableBase {}
-			class LocalCommandMiddleware extends TestableBase {}
+		it("should throw an error when imported modules export conflicting query pre-handler names", () => {
+			class ImportedQueryMiddlewareA extends TestableBase {}
+			class ImportedQueryMiddlewareB extends TestableBase {}
 
 			expect(() => {
 				registerModule({
 					name: "MainModule",
 					imports: [
 						{
-							name: "ImportedModule",
-							commandPreHandlerExports: {
-								auth: ImportedCommandMiddleware,
+							name: "ImportedModuleA",
+							queryPreHandlerExports: {
+								auth: ImportedQueryMiddlewareA,
+							},
+						},
+						{
+							name: "ImportedModuleB",
+							queryPreHandlerExports: {
+								auth: ImportedQueryMiddlewareB,
 							},
 						},
 					],
-					commandPreHandlers: {
-						auth: LocalCommandMiddleware,
-					},
 				});
 			}).toThrow(ERRORS.MiddlewareNameConflictError);
 		});
