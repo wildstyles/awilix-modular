@@ -13,9 +13,9 @@ type Response = Result<SuccessResponse, CatsNotFoundError>;
 export class GetCatsQueryHandler
 	implements Handler<GetCatsQueryHandler["contract"]>
 {
-	readonly key = "cats/get-cats";
+	static readonly key = "cats/get-cats";
 	declare readonly contract: QueryContract<
-		"cats/get-cats",
+		typeof GetCatsQueryHandler.key,
 		Payload,
 		Response,
 		| { name: "auth-logging"; includePreHandlerKeys: ["auth", "logging"] }

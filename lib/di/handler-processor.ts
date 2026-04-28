@@ -73,6 +73,11 @@ export class HandlerProcessor {
 			const { useClass: HandlerClass, ...handlerOptions } = isClassHandler(h)
 				? h
 				: { useClass: h };
+			const handlerKey = (HandlerClass as { key?: unknown }).key;
+
+			if (typeof handlerKey !== "string" || !handlerKey.length) {
+				throw new ERRORS.HandlerMissingStaticKeyError(HandlerClass.name);
+			}
 
 			const options = this.extractResolverOptions(m, handlerOptions);
 			const handlerSymbol = Symbol(`${prefix}-handler_${HandlerClass.name}`);
@@ -81,22 +86,15 @@ export class HandlerProcessor {
 				[handlerSymbol]: Awilix.asClass(HandlerClass, options),
 			});
 
-			const resolveHandler = (): Handler<AnyContract> => {
+			mediator.register(handlerKey, (payload, context) => {
 				const requestScope =
 					options.lifetime === Awilix.Lifetime.SINGLETON
 						? scope
 						: getOrCreateRequestScope(scope);
 
-				return requestScope.resolve(handlerSymbol);
-			};
-
-			const { key } = resolveHandler();
-
-			if (!key)
-				throw new ERRORS.HandlerMissingStaticKeyError(HandlerClass.name);
-
-			mediator.register(key, (payload, context) => {
-				return resolveHandler().executor(payload, context);
+				return requestScope
+					.resolve<Handler<AnyContract>>(handlerSymbol)
+					.executor(payload, context);
 			});
 		}
 

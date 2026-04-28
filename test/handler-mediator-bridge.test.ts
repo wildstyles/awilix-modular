@@ -24,7 +24,7 @@ function registerModule(
 describe("HandlerProcessor + Mediator bridge", () => {
 	it("should register query and command mediators that execute registered handlers", async () => {
 		class GetUsersQueryHandler {
-			readonly key = "get-users";
+			static readonly key = "get-users";
 
 			async executor(payload: { limit: number }) {
 				return { items: ["A", "B"].slice(0, payload.limit) };
@@ -32,7 +32,7 @@ describe("HandlerProcessor + Mediator bridge", () => {
 		}
 
 		class CreateUserCommandHandler {
-			readonly key = "create-user";
+			static readonly key = "create-user";
 
 			async executor(payload: { name: string }) {
 				return { created: payload.name };
@@ -59,7 +59,7 @@ describe("HandlerProcessor + Mediator bridge", () => {
 
 	it("should throw when executing a handler key that is not registered", async () => {
 		class GetUsersQueryHandler {
-			readonly key = "get-users";
+			static readonly key = "get-users";
 
 			async executor() {
 				return { ok: true };
@@ -93,7 +93,7 @@ describe("HandlerProcessor + Mediator bridge", () => {
 
 	it("should throw when duplicate handler keys are registered", () => {
 		class FirstQueryHandler {
-			readonly key = "get-users";
+			static readonly key = "get-users";
 
 			async executor() {
 				return { ok: true };
@@ -101,7 +101,7 @@ describe("HandlerProcessor + Mediator bridge", () => {
 		}
 
 		class SecondQueryHandler {
-			readonly key = "get-users";
+			static readonly key = "get-users";
 
 			async executor() {
 				return { ok: true };
@@ -118,7 +118,7 @@ describe("HandlerProcessor + Mediator bridge", () => {
 	it("should reuse singleton handler instance across executions", async () => {
 		class GetUsersQueryHandler {
 			static instances = 0;
-			readonly key = "get-users";
+			static readonly key = "get-users";
 			readonly instanceId = Math.random();
 
 			constructor() {

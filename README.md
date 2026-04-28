@@ -521,9 +521,9 @@ app.get("/users/:id", async (req, res) => {
 import type { QueryContract } from "awilix-modular";
 
 export class GetUserQueryHandler {
-  readonly key = "users/get-user"; // Unique identifier
+  static readonly key = "users/get-user"; // Unique identifier
   declare readonly contract: QueryContract<
-    "users/get-user",
+    typeof GetUserQueryHandler.key,
     { userId: string }, // Input shape
     User // Output shape
   >;
@@ -544,7 +544,7 @@ export class GetUserQueryHandler {
 
 ### Defining Query Handlers
 
-Create handlers that implement the `Handler<QueryContract<...>>` interface with a unique key and executor function:
+Create handlers that implement the `Handler<QueryContract<...>>` interface with a unique static key and executor function:
 
 ```typescript
 import { type Handler, type QueryContract } from "awilix-modular";
@@ -557,8 +557,12 @@ type Response = { id: string; role: "admin" | "user" };
 export class GetUserQueryHandler implements Handler<
   GetUserQueryHandler["contract"]
 > {
-  readonly key = "users/get-user";
-  declare readonly contract: QueryContract<"users/get-user", Payload, Response>;
+  static readonly key = "users/get-user";
+  declare readonly contract: QueryContract<
+    typeof GetUserQueryHandler.key,
+    Payload,
+    Response
+  >;
 
   constructor(private readonly userService: UserModuleDeps["userService"]) {}
 
@@ -715,9 +719,9 @@ class HandlerError extends Error {}
 type Response = Result<{ id: string }, HandlerError>;
 
 export class GetUserHandler implements Handler<GetUserHandler["contract"]> {
-  readonly key = "users/get";
+  static readonly key = "users/get";
   declare readonly contract: QueryContract<
-    "users/get",
+    typeof GetUserHandler.key,
     { userId: string },
     Response
   >;

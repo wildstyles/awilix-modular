@@ -2,7 +2,6 @@ import type { AnyContract } from "./contract.types.js";
 import type { EmptyContext } from "./middleware.types.js";
 
 export interface Handler<C extends AnyContract, K extends C["key"] = C["key"]> {
-	readonly key: K;
 	readonly contract: C;
 	executor: Executor<
 		ExtractPayload<C, K>,

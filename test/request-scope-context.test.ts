@@ -32,7 +32,7 @@ describe("Request scope context (AsyncLocalStorage)", () => {
 		}
 
 		class GetScopeIdHandler {
-			readonly key = "get-scope-id";
+			static readonly key = "get-scope-id";
 
 			constructor(private readonly deps: any) {}
 

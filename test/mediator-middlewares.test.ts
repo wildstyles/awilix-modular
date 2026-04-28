@@ -42,7 +42,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor(_: unknown, context: any) {
 				calls.push("handler");
@@ -81,7 +81,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor() {
 				return { ok: true };
@@ -125,7 +125,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor(_: unknown, context: any) {
 				calls.push("handler");
@@ -160,7 +160,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor() {
 				throw new Error("handler must not run");
@@ -188,7 +188,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor() {
 				return "plain-handler-result";
@@ -216,7 +216,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor() {
 				return { ok: true };
@@ -249,7 +249,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor(_: unknown, context: any) {
 				return context;
@@ -284,7 +284,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor() {
 				return { ok: true };
@@ -321,7 +321,7 @@ describe("Mediator middleware scenarios", () => {
 		}
 
 		class GetDataHandler {
-			readonly key = "get-data";
+			static readonly key = "get-data";
 
 			async executor(_: unknown, context: any) {
 				return context.middlewareInstanceId;
