@@ -6,8 +6,8 @@ import type {
 	QueryContract,
 } from "../lib/mediator/contract.types.js";
 import { Mediator } from "../lib/mediator/mediator.js";
-import { Result } from "../lib/mediator/result.js";
 import type { MiddlewareContract } from "../lib/mediator/middleware.types.js";
+import type { Result } from "../lib/mediator/result.js";
 
 class LocalAuthError {
 	private declare readonly __brand: "LocalAuthError";

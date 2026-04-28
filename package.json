@@ -3,7 +3,7 @@
 	"description": "HTTP-framework-agnostic modular DI and CQRS framework for Awilix with Nest-like module patterns and strict type safety",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
-	"version": "2.1.2",
+	"version": "2.2.0",
 	"license": "MIT",
 	"scripts": {
 		"build": "tsc",
