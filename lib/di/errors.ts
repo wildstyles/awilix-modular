@@ -61,13 +61,13 @@ export class CircularModuleDependencyError extends Error {
 	}
 }
 
-export class GlobalModuleImportsNotAllowedError extends Error {
-	constructor(moduleName: string) {
+export class GlobalModuleImportsGlobalModuleError extends Error {
+	constructor(moduleName: string, importedGlobalModuleName: string) {
 		super(
-			`Global module "${moduleName}" cannot have imports. ` +
-				`Keep global modules import-free and register additional globals explicitly in DIContext.globalModules.`,
+			`Global module "${moduleName}" cannot import global module "${importedGlobalModuleName}". ` +
+				`Register both modules in DIContext.globalModules without importing one from another.`,
 		);
-		this.name = "GlobalModuleImportsNotAllowedError";
+		this.name = "GlobalModuleImportsGlobalModuleError";
 	}
 }
 

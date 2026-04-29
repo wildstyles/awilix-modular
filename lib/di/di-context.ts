@@ -178,11 +178,18 @@ export class DIContext {
 					globalModule.name,
 				);
 			}
-			if ((globalModule.imports || []).length > 0) {
-				throw new ERRORS.GlobalModuleImportsNotAllowedError(globalModule.name);
-			}
-
 			globalModuleNames.add(globalModule.name);
+		}
+
+		for (const globalModule of globalModules) {
+			for (const importedModule of this.resolveImports(globalModule)) {
+				if (globalModuleNames.has(importedModule.name)) {
+					throw new ERRORS.GlobalModuleImportsGlobalModuleError(
+						globalModule.name,
+						importedModule.name,
+					);
+				}
+			}
 		}
 
 		this.globalModulesWithScope = globalModules.map((module) => ({

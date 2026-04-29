@@ -510,7 +510,47 @@ describe("DIContext - CLASSIC Injection Mode - globalModules", () => {
 		}).toThrow(ERRORS.DuplicateModuleImportError);
 	});
 
-	it("should throw when a global module has imports", () => {
+	it("should allow a global module to import a non-global module", () => {
+		class ImportedService {}
+
+		const { scope } = registerModule(
+			{},
+			{
+				globalModules: [
+					{
+						name: "ValidGlobal",
+						imports: [
+							{
+								name: "ImportedModule",
+								providers: {
+									importedService: ImportedService,
+								},
+								exports: {
+									importedService: ImportedService,
+								},
+							},
+						],
+						exports: {
+							globalConsumer: class {
+								constructor(
+									public readonly importedService: ImportedService,
+								) {}
+							},
+						},
+					},
+				],
+			},
+		);
+
+		const consumer = scope.resolve<any>("globalConsumer");
+		expect(consumer.importedService).toBeDefined();
+	});
+
+	it("should throw when a global module imports another global module", () => {
+		const sharedGlobal = {
+			name: "SharedGlobal",
+		};
+
 		expect(() => {
 			registerModule(
 				{},
@@ -518,12 +558,13 @@ describe("DIContext - CLASSIC Injection Mode - globalModules", () => {
 					globalModules: [
 						{
 							name: "InvalidGlobal",
-							imports: [{ name: "ImportedModule" }],
+							imports: [sharedGlobal],
 						},
+						sharedGlobal,
 					],
 				},
 			);
-		}).toThrow(ERRORS.GlobalModuleImportsNotAllowedError);
+		}).toThrow(ERRORS.GlobalModuleImportsGlobalModuleError);
 	});
 
 	it("should throw when local providers conflict with global module exports", () => {

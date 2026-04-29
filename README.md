@@ -1353,9 +1353,6 @@ declare module "awilix-modular" {
 
 Use global modules for cross-cutting infrastructure dependencies (app instance, logger, config, pre-handlers) that should be accessible in every module.
 
-> [!IMPORTANT]
-> Global modules must be leaf modules (no `imports`). They can export providers and pre-handlers, and those exports participate in normal type inference.
-
 ## Circular Dependencies
 
 Awilix-modular supports circular dependencies between providers and modules using `allowCircular` and `forwardRef` utilities.
