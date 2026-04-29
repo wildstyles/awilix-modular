@@ -532,9 +532,7 @@ describe("DIContext - CLASSIC Injection Mode - globalModules", () => {
 						],
 						exports: {
 							globalConsumer: class {
-								constructor(
-									public readonly importedService: ImportedService,
-								) {}
+								constructor(public readonly importedService: ImportedService) {}
 							},
 						},
 					},
